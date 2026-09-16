@@ -1,7 +1,7 @@
 //! Sync App composer prefs into the agent process environment.
 //!
 //! Independent mode (`GROK_HOME` = app agent-home): write `[ui]` permission keys so
-//! Grok Build enforces dontAsk / acceptEdits / YOLO at the agent layer (not only Host).
+//! Supercharge enforces dontAsk / acceptEdits / YOLO at the agent layer (not only Host).
 //! Shared mode leaves `~/.grok/config.toml` alone — Host policy + spawn flags only.
 
 use std::fs;
@@ -13,7 +13,7 @@ use crate::agent_home_config::{
 use crate::paths::{agent_home_dir, resolve_agent_grok_home};
 use crate::permission::PermissionPolicy;
 
-/// Map App policy → `[ui] permission_mode` values used by Grok Build config.toml.
+/// Map App policy → `[ui] permission_mode` values used by Supercharge config.toml.
 pub fn ui_permission_mode(policy: &str) -> &'static str {
     match PermissionPolicy::parse(policy) {
         PermissionPolicy::AcceptEdits => "acceptEdits",

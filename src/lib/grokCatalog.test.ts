@@ -75,10 +75,9 @@ describe("effortsForModel", () => {
     expect(list[0].label).toBe("High Effort");
   });
 
-  it("falls back to 4-tier xhigh for grok-4.6 without live efforts", () => {
+  it("does not infer effort tiers from a real model id", () => {
     const list = effortsForModel({ id: "grok-4.6", label: "Grok 4.6" });
-    expect(list.map((e) => e.id)).toEqual(["low", "medium", "high", "xhigh"]);
-    expect(list.find((e) => e.isDefault)?.id).toBe("xhigh");
+    expect(list).toEqual(GROK_BUILD_EFFORTS);
   });
 
   it("prefers explicit catalogEfforts arg over model", () => {
@@ -124,24 +123,30 @@ describe("pickDefaultEffort", () => {
     expect(pickDefaultEffort({ id: "x", label: "X" })).toBe("high");
   });
 
-  it("prefers xhigh when CLI cache marks both xhigh and high as default", () => {
+  it("keeps the first catalog-declared default without model assumptions", () => {
     const dual: EffortOption[] = [
-      { id: "xhigh", isDefault: true },
       { id: "high", isDefault: true },
+      { id: "xhigh", isDefault: true },
       { id: "medium" },
       { id: "low" },
     ];
-    expect(normalizeEffortDefaults(dual).filter((e) => e.isDefault).map((e) => e.id)).toEqual([
-      "xhigh",
-    ]);
-    expect(pickDefaultEffort(null, dual)).toBe("xhigh");
+    expect(
+      normalizeEffortDefaults(dual)
+        .filter((e) => e.isDefault)
+        .map((e) => e.id),
+    ).toEqual(["high"]);
+    expect(pickDefaultEffort(null, dual)).toBe("high");
   });
 });
 
 describe("effortCatalogForRoute", () => {
-  it("uses grok-4.6 xhigh when official and no channel catalog", () => {
+  it("uses live model effort metadata when present", () => {
     const list = effortCatalogForRoute({
-      model: { id: "grok-4.6", label: "Grok 4.6" },
+      model: {
+        id: "any-real-model-id",
+        label: "Any model",
+        reasoningEfforts: GROK_4_6_EFFORTS,
+      },
     });
     expect(list.map((e) => e.id)).toEqual(["low", "medium", "high", "xhigh"]);
     expect(isValidEffort("xhigh", list)).toBe(true);
@@ -157,11 +162,10 @@ describe("effortCatalogForRoute", () => {
   });
 });
 
-describe("official catalog fallback", () => {
-  it("defaults to grok-4.6 and keeps grok-4.5 selectable", () => {
-    expect(DEFAULT_MODEL_ID).toBe("grok-4.6");
-    expect(GROK_BUILD_MODELS.map((m) => m.id)).toEqual(["grok-4.6", "grok-4.5"]);
-    expect(GROK_BUILD_MODELS.find((m) => m.isDefault)?.id).toBe("grok-4.6");
+describe("catalog cold start", () => {
+  it("does not invent product model routes before host discovery", () => {
+    expect(DEFAULT_MODEL_ID).toBe("");
+    expect(GROK_BUILD_MODELS).toEqual([]);
   });
 });
 
@@ -223,7 +227,7 @@ describe("effort UI ladder", () => {
     ).toEqual(["low", "medium", "high"]);
   });
 
-  it("orders Grok 4.6 as 低/中/高/极高 with xhigh spawn", () => {
+  it("orders a live 4-tier catalog as 低/中/高/极高", () => {
     const opts = effortUiOptionsForCatalog(GROK_4_6_EFFORTS);
     expect(opts.map((o) => o.uiId)).toEqual(["low", "medium", "high", "xhigh"]);
     expect(opts.map((o) => o.spawnId)).toEqual([
@@ -233,9 +237,13 @@ describe("effort UI ladder", () => {
       "xhigh",
     ]);
     expect(spawnIdToEffortUiSlot("xhigh", GROK_4_6_EFFORTS)).toBe("xhigh");
-    expect(isValidEffort("xhigh", { id: "grok-4.6", label: "Grok 4.6" })).toBe(
-      true,
-    );
+    expect(
+      isValidEffort("xhigh", {
+        id: "any-real-model-id",
+        label: "Any model",
+        reasoningEfforts: GROK_4_6_EFFORTS,
+      }),
+    ).toBe(true);
   });
 
   it("prefers xhigh over max for 极高 when a 4-tier catalog lists both (#598)", () => {

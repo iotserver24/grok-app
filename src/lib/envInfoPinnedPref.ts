@@ -3,7 +3,7 @@
  * localStorage-only — does not touch Host AppSettings.
  */
 
-export const ENV_INFO_PINNED_STORAGE_KEY = "grok.envInfoPinned";
+export const ENV_INFO_PINNED_STORAGE_KEY = "supercharge.envInfoPinned";
 
 /** Fired on `window` after a successful save (detail = boolean pinned). */
 export const ENV_INFO_PINNED_CHANGE_EVENT = "grok-env-info-pinned-change";

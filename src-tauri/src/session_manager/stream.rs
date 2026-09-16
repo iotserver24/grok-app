@@ -175,7 +175,7 @@ impl SessionManager {
     /// as load-replay (P0-3).
     ///
     /// **Human gates are different:** `exit_plan_mode` / `ask_user_question` are
-    /// live reverse-RPCs that Grok Build may re-issue after resume with **no**
+    /// live reverse-RPCs that Supercharge may re-issue after resume with **no**
     /// prompt in flight (`RestorePlanApproval`). Use
     /// [`Self::should_drop_plan_event`] / [`Self::should_drop_ask_user_event`]
     /// for those — never this helper alone.
@@ -1597,7 +1597,7 @@ mod stream_emit_lock_tests {
                 workspace_capability: None,
             },
             fsm,
-            backend: "grok_agent_stdio".into(),
+            backend: "supercharge_agent_stdio".into(),
             acp: None,
             mock_stream: None,
             streaming_message_id: Some("msg-1".into()),

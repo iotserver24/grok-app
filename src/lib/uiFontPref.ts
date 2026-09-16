@@ -4,7 +4,7 @@
  * Applied by setting --font-sans on documentElement.
  */
 
-export const UI_FONT_FAMILY_STORAGE_KEY = "grok.uiFontFamily";
+export const UI_FONT_FAMILY_STORAGE_KEY = "supercharge.uiFontFamily";
 
 /** Empty → keep CSS token default from tokens.css. */
 export const DEFAULT_UI_FONT_FAMILY = "";

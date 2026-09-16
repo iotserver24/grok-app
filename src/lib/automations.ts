@@ -40,7 +40,7 @@ export interface AutomationInput {
   nextRunAt?: string | null;
 }
 
-const LS_KEY = "grok-app.automations";
+const LS_KEY = "supercharge-app.automations";
 
 /** Browser / fallback store when Tauri is unavailable. */
 export function loadAutomationsLocal(): Automation[] {

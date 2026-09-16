@@ -2,6 +2,8 @@
 
 interface ImportMetaEnv {
   readonly VITE_GROK_DISPLAY_VERSION?: string;
+  readonly VITE_SUPERCHARGE_RELEASES_URL?: string;
+  /** Legacy build-time alias retained for existing local environments. */
   readonly VITE_GROK_RELEASES_URL?: string;
 }
 

@@ -5,7 +5,7 @@
  */
 
 /** Storage key for the optional composer draft stats toggle. */
-export const COMPOSER_DRAFT_STATS_KEY = "grok.composerDraftStats";
+export const COMPOSER_DRAFT_STATS_KEY = "supercharge.composerDraftStats";
 
 /** Fired on `window` after a same-tab preference save (storage events are cross-tab only). */
 export const COMPOSER_DRAFT_STATS_CHANGED_EVENT = "grok:composerDraftStats";

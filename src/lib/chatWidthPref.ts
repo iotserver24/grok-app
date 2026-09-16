@@ -11,7 +11,7 @@
 
 export type ChatWidth = "narrow" | "medium" | "wide" | "full";
 
-export const CHAT_WIDTH_STORAGE_KEY = "grok.chatWidth";
+export const CHAT_WIDTH_STORAGE_KEY = "supercharge.chatWidth";
 export const DEFAULT_CHAT_WIDTH: ChatWidth = "medium";
 export const CHAT_WIDTH_ATTR = "data-chat-width";
 /** Optional window event after save/apply (detail = preference). */

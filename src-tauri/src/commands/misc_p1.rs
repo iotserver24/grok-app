@@ -2,7 +2,7 @@
 
 const SETUP_CMD_TIMEOUT_SECS: u64 = 60;
 
-/// Clear Grok Build cross-session memory (`grok memory clear`).
+/// Clear Supercharge cross-session memory (`supercharge memory clear`).
 #[tauri::command]
 pub async fn memory_clear(
     cwd: Option<String>,
@@ -86,7 +86,7 @@ pub async fn agent_config_toml_read(
 ///
 /// Always keyword / file-body scan — never invents embeddings client-side.
 /// Agent-tool hybrid (vector + full-text) needs `[memory.embedding].model`
-/// (see `memory_embed_config_get`). No host-invocable `grok memory search` CLI
+/// (see `memory_embed_config_get`). No host-invocable `supercharge memory search` CLI
 /// as of 0.2.117 — when model is set, `search_kind` is `hybrid_unavailable`.
 #[tauri::command]
 pub async fn memory_search(
@@ -119,7 +119,7 @@ pub async fn memory_search(
     .map_err(|e| format!("memory search task failed: {e}"))?
 }
 
-/// Read allowlisted Grok Build 0.2.117 memory embedding keys from active GROK_HOME.
+/// Read allowlisted Supercharge 0.2.117 memory embedding keys from active GROK_HOME.
 /// Soft-fails missing file/keys (null fields). Never invents embedding defaults.
 #[tauri::command]
 pub async fn memory_embed_config_get(
@@ -323,7 +323,7 @@ pub async fn codebase_indexing_set(
 }
 
 // marketplace
-// ── Plugin marketplace (`grok plugin marketplace …` + available list) ───────
+// ── Plugin marketplace (`supercharge plugin marketplace …` + available list) ───────
 //
 // Marketplace list --json currently returns sources only (no nested plugins).
 // Browse installable plugins via `plugin list --json --available`.
@@ -368,7 +368,7 @@ pub struct AvailablePluginDto {
 }
 
 
-/// Parse `grok plugin marketplace list --json` (array or `{ sources: [...] }`).
+/// Parse `supercharge plugin marketplace list --json` (array or `{ sources: [...] }`).
 pub fn parse_marketplace_list_json(raw: &str) -> Result<Vec<MarketplaceSourceDto>, String> {
     let text = raw.trim();
     if text.is_empty() {
@@ -1335,7 +1335,7 @@ pub async fn wallpaper_library_find_by_id(
         .map_err(|e| format!("wallpaper_library_find_by_id: {e}"))?
 }
 
-/// Headless probe: `grok -p … --output-format streaming-messages-json` (CLI 0.2.117+).
+/// Headless probe: `supercharge -p … --output-format streaming-messages-json` (CLI 0.2.117+).
 /// Soft-fails older CLIs without spawning. Raw NDJSON returned to UI only — never logged.
 #[tauri::command]
 pub async fn streaming_messages_json_probe(
@@ -1434,7 +1434,7 @@ pub async fn audit_ledger_export(
     .await
 }
 
-/// One-shot headless batch turn for a project cwd (`grok -p`, soft-fail).
+/// One-shot headless batch turn for a project cwd (`supercharge -p`, soft-fail).
 /// Sequential multi-project dispatch lives in the FE; this runs a single project.
 #[tauri::command]
 pub async fn batch_agents_headless(

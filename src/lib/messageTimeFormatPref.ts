@@ -8,7 +8,7 @@
 
 export type MessageTimeFormat = "absolute" | "relative";
 
-export const MESSAGE_TIME_FORMAT_STORAGE_KEY = "grok.messageTimeFormat";
+export const MESSAGE_TIME_FORMAT_STORAGE_KEY = "supercharge.messageTimeFormat";
 
 /** Fired on `window` after a successful save (detail = format). */
 export const MESSAGE_TIME_FORMAT_CHANGE_EVENT =

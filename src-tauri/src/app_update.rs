@@ -1,7 +1,7 @@
 //! Check for newer App releases on GitHub (manual fallback path).
 //!
-//! Prefer the Tauri updater plugin (`updater` module) when the binary was built
-//! with `GROK_UPDATER_*` secrets — that path downloads, verifies, installs, and
+//! Prefer the Tauri updater plugin (`updater` module) when updater signing
+//! configuration is present — that path downloads, verifies, installs, and
 //! relaunches. This module remains for:
 //! - Local / unsigned builds (plugin not registered)
 //! - Linux `.deb` / `.rpm` installs (in-place update unsupported)
@@ -19,9 +19,15 @@ use serde::Serialize;
 use serde_json::Value;
 
 const DEFAULT_RELEASES_API_URL: &str =
-    "https://api.github.com/repos/RongleCat/grok-app/releases/latest";
-const DEFAULT_RELEASES_HTML_URL: &str = "https://github.com/RongleCat/grok-app/releases/latest";
-const DEFAULT_RELEASES_PAGE: &str = "https://github.com/RongleCat/grok-app/releases";
+    "https://api.github.com/repos/iotserver24/supercharge-releases/releases/latest";
+const DEFAULT_RELEASES_HTML_URL: &str =
+    "https://github.com/iotserver24/supercharge-releases/releases/latest";
+const DEFAULT_RELEASES_PAGE: &str = "https://github.com/iotserver24/supercharge-releases/releases";
+const SUPERCHARGE_RELEASES_API_ENV: &str = "SUPERCHARGE_APP_RELEASES_URL";
+const SUPERCHARGE_RELEASES_HTML_ENV: &str = "SUPERCHARGE_APP_RELEASES_HTML_URL";
+const LEGACY_RELEASES_API_ENV: &str = "GROK_APP_RELEASES_URL";
+const LEGACY_RELEASES_HTML_ENV: &str = "GROK_APP_RELEASES_HTML_URL";
+const SUPERCHARGE_REPOSITORY_URL: &str = "https://github.com/iotserver24/supercharge-releases";
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(12);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -94,9 +100,9 @@ fn is_skipped_release_asset(lower_name: &str) -> bool {
 }
 
 fn is_stable_installer_name(lower_name: &str) -> bool {
-    lower_name.starts_with("grok_mac_")
-        || lower_name.starts_with("grok_windows_")
-        || lower_name.starts_with("grok_linux_")
+    lower_name.starts_with("supercharge_mac_")
+        || lower_name.starts_with("supercharge_windows_")
+        || lower_name.starts_with("supercharge_linux_")
 }
 
 fn prefer_tokens(os: &str, arch: &str) -> &'static [&'static str] {
@@ -142,7 +148,7 @@ fn pick_platform_asset_for(
         if os == "windows" && lower.contains("portable") {
             score = score.saturating_sub(30);
         }
-        // Prefer grok-app.com stable aliases over versioned twins.
+        // Prefer Supercharge stable aliases over versioned twins.
         if is_stable_installer_name(&lower) {
             score = score.saturating_add(20);
         }
@@ -229,9 +235,9 @@ pub fn parse_github_release(current_version: &str, v: &Value) -> Result<AppUpdat
 /// Extract `v0.1.7` / `0.1.7` from a releases tag URL or path.
 ///
 /// Accepts:
-/// - `https://github.com/RongleCat/grok-app/releases/tag/v0.1.7`
+/// - `https://github.com/iotserver24/supercharge-releases/releases/tag/v0.1.7`
 /// - `.../releases/tag/v0.1.7?foo=1`
-/// - `/RongleCat/grok-app/releases/tag/0.1.7`
+/// - `/iotserver24/supercharge-releases/releases/tag/0.1.7`
 pub fn extract_tag_from_release_url(url: &str) -> Option<String> {
     let base = url.split(['?', '#']).next().unwrap_or(url);
     // Find `/releases/tag/<tag>`
@@ -296,6 +302,22 @@ fn format_http_error(status: u16, body: &str) -> String {
         }
     }
     format!("GitHub releases returned HTTP {status}")
+}
+
+fn release_url_from_env(primary: &str, legacy: &str, default: &str) -> String {
+    std::env::var(primary)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            std::env::var(legacy)
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+        })
+        .unwrap_or_else(|| default.to_string())
+}
+
+fn supercharge_user_agent(current_version: &str) -> String {
+    format!("Supercharge/{current_version} (desktop; check-update; +{SUPERCHARGE_REPOSITORY_URL})")
 }
 
 fn http_client(user_agent: &str) -> Result<reqwest::Client, String> {
@@ -363,9 +385,7 @@ async fn fetch_via_html_redirect(
     latest_url: &str,
     current_version: &str,
 ) -> Result<AppUpdateCheck, String> {
-    let ua = format!(
-        "GrokApp/{current_version} (desktop; check-update; +https://github.com/RongleCat/grok-app)"
-    );
+    let ua = supercharge_user_agent(current_version);
 
     // 1) Prefer Location header without downloading the HTML body.
     let client_nr = crate::proxy::apply_to_reqwest(reqwest::Client::builder())
@@ -404,7 +424,7 @@ async fn fetch_via_html_redirect(
                 } else {
                     format!("v{tag}")
                 };
-                let html = format!("https://github.com/RongleCat/grok-app/releases/tag/{tag_path}");
+                let html = format!("{DEFAULT_RELEASES_PAGE}/tag/{tag_path}");
                 return Ok(build_check_from_tag(current_version, &tag, &html));
             }
         }
@@ -430,10 +450,16 @@ async fn fetch_via_html_redirect(
 /// Query GitHub for the latest release and compare to this build.
 pub async fn check_app_update() -> Result<AppUpdateCheck, String> {
     let current = env!("CARGO_PKG_VERSION");
-    let api_url =
-        std::env::var("GROK_APP_RELEASES_URL").unwrap_or_else(|_| DEFAULT_RELEASES_API_URL.into());
-    let html_url = std::env::var("GROK_APP_RELEASES_HTML_URL")
-        .unwrap_or_else(|_| DEFAULT_RELEASES_HTML_URL.into());
+    let api_url = release_url_from_env(
+        SUPERCHARGE_RELEASES_API_ENV,
+        LEGACY_RELEASES_API_ENV,
+        DEFAULT_RELEASES_API_URL,
+    );
+    let html_url = release_url_from_env(
+        SUPERCHARGE_RELEASES_HTML_ENV,
+        LEGACY_RELEASES_HTML_ENV,
+        DEFAULT_RELEASES_HTML_URL,
+    );
 
     if !is_allowed_update_url(&api_url) {
         return Err("update check URL must be https (or localhost for tests)".into());
@@ -442,9 +468,7 @@ pub async fn check_app_update() -> Result<AppUpdateCheck, String> {
         return Err("update fallback URL must be https (or localhost for tests)".into());
     }
 
-    let ua = format!(
-        "GrokApp/{current} (desktop; check-update; +https://github.com/RongleCat/grok-app)"
-    );
+    let ua = supercharge_user_agent(current);
     let client = http_client(&ua)?;
 
     match fetch_via_api(&client, &api_url).await {
@@ -463,6 +487,42 @@ pub async fn check_app_update() -> Result<AppUpdateCheck, String> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn supercharge_release_env_precedes_legacy_env() {
+        let _guard = crate::paths::APP_HOME_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let primary = "SUPERCHARGE_APP_RELEASES_TEST_PRIMARY";
+        let legacy = "SUPERCHARGE_APP_RELEASES_TEST_LEGACY";
+        unsafe {
+            std::env::set_var(primary, "https://primary.example/releases");
+            std::env::set_var(legacy, "https://legacy.example/releases");
+        }
+        assert_eq!(
+            release_url_from_env(primary, legacy, "https://default.example/releases"),
+            "https://primary.example/releases"
+        );
+        unsafe {
+            std::env::remove_var(primary);
+        }
+        assert_eq!(
+            release_url_from_env(primary, legacy, "https://default.example/releases"),
+            "https://legacy.example/releases"
+        );
+        unsafe {
+            std::env::remove_var(legacy);
+        }
+    }
+
+    #[test]
+    fn update_user_agent_is_supercharge_branded() {
+        let user_agent = supercharge_user_agent("1.2.3");
+        assert!(user_agent.starts_with("Supercharge/1.2.3"));
+        assert!(user_agent.contains("iotserver24/supercharge-releases"));
+        assert!(!user_agent.contains("GrokApp"));
+        assert!(!user_agent.contains("grok-app"));
+    }
 
     #[test]
     fn parse_semver_strips_v_and_prerelease() {
@@ -488,13 +548,13 @@ mod tests {
     fn parse_github_release_update_and_same() {
         let sample = json!({
             "tag_name": "v0.2.0",
-            "name": "Grok App v0.2.0",
-            "html_url": "https://github.com/RongleCat/grok-app/releases/tag/v0.2.0",
+            "name": "Supercharge v0.2.0",
+            "html_url": "https://github.com/iotserver24/supercharge-releases/releases/tag/v0.2.0",
             "published_at": "2026-07-24T00:00:00Z",
             "body": "### Added\n- hello",
             "assets": [
-                {"name": "Grok_0.2.0_aarch64.dmg"},
-                {"name": "Grok_0.2.0_x64-setup.exe"}
+                {"name": "Supercharge_0.2.0_aarch64.dmg"},
+                {"name": "Supercharge_0.2.0_x64-setup.exe"}
             ]
         });
         let up = parse_github_release("0.1.5", &sample).unwrap();
@@ -514,7 +574,7 @@ mod tests {
         json!({
             "name": name,
             "browser_download_url": format!(
-                "https://github.com/RongleCat/grok-app/releases/download/v0.2.20/{name}"
+                "https://github.com/iotserver24/supercharge-releases/releases/download/v0.2.20/{name}"
             )
         })
     }
@@ -522,70 +582,71 @@ mod tests {
     #[test]
     fn pick_macos_intel_prefers_stable_dmg_over_arm_and_updater() {
         let assets = vec![
-            gh_asset("Grok_0.2.20_x64.app.tar.gz"),
-            gh_asset("Grok_0.2.20_aarch64.dmg"),
-            gh_asset("Grok_mac_aarch64.dmg"),
-            gh_asset("Grok_0.2.20_x64.dmg"),
-            gh_asset("Grok_mac_x64.dmg"),
+            gh_asset("Supercharge_0.2.20_x64.app.tar.gz"),
+            gh_asset("Supercharge_0.2.20_aarch64.dmg"),
+            gh_asset("Supercharge_mac_aarch64.dmg"),
+            gh_asset("Supercharge_0.2.20_x64.dmg"),
+            gh_asset("Supercharge_mac_x64.dmg"),
         ];
         let (url, name) = pick_platform_asset_for("macos", "x86_64", Some(&assets));
-        assert_eq!(name.as_deref(), Some("Grok_mac_x64.dmg"));
-        assert!(url.unwrap().ends_with("/Grok_mac_x64.dmg"));
+        assert_eq!(name.as_deref(), Some("Supercharge_mac_x64.dmg"));
+        assert!(url.unwrap().ends_with("/Supercharge_mac_x64.dmg"));
     }
 
     #[test]
     fn pick_macos_arm_prefers_stable_dmg() {
         let assets = vec![
-            gh_asset("Grok_0.2.20_aarch64.app.tar.gz"),
-            gh_asset("Grok_0.2.20_x64.dmg"),
-            gh_asset("Grok_mac_x64.dmg"),
-            gh_asset("Grok_0.2.20_aarch64.dmg"),
-            gh_asset("Grok_mac_aarch64.dmg"),
+            gh_asset("Supercharge_0.2.20_aarch64.app.tar.gz"),
+            gh_asset("Supercharge_0.2.20_x64.dmg"),
+            gh_asset("Supercharge_mac_x64.dmg"),
+            gh_asset("Supercharge_0.2.20_aarch64.dmg"),
+            gh_asset("Supercharge_mac_aarch64.dmg"),
         ];
         let (url, name) = pick_platform_asset_for("macos", "aarch64", Some(&assets));
-        assert_eq!(name.as_deref(), Some("Grok_mac_aarch64.dmg"));
-        assert!(url.unwrap().ends_with("/Grok_mac_aarch64.dmg"));
+        assert_eq!(name.as_deref(), Some("Supercharge_mac_aarch64.dmg"));
+        assert!(url.unwrap().ends_with("/Supercharge_mac_aarch64.dmg"));
     }
 
     #[test]
     fn pick_windows_prefers_stable_setup_over_portable() {
         let assets = vec![
-            gh_asset("Grok_0.2.20_x64-portable.zip"),
-            gh_asset("Grok_windows_x64-portable.zip"),
-            gh_asset("Grok_0.2.20_x64-setup.exe"),
-            gh_asset("Grok_windows_x64-setup.exe"),
+            gh_asset("Supercharge_0.2.20_x64-portable.zip"),
+            gh_asset("Supercharge_windows_x64-portable.zip"),
+            gh_asset("Supercharge_0.2.20_x64-setup.exe"),
+            gh_asset("Supercharge_windows_x64-setup.exe"),
             gh_asset("latest.json"),
             gh_asset("SHA256SUMS"),
         ];
         let (url, name) = pick_platform_asset_for("windows", "x86_64", Some(&assets));
-        assert_eq!(name.as_deref(), Some("Grok_windows_x64-setup.exe"));
-        assert!(url.unwrap().ends_with("/Grok_windows_x64-setup.exe"));
+        assert_eq!(name.as_deref(), Some("Supercharge_windows_x64-setup.exe"));
+        assert!(url.unwrap().ends_with("/Supercharge_windows_x64-setup.exe"));
     }
 
     #[test]
     fn extract_tag_from_release_url_ok() {
         assert_eq!(
             extract_tag_from_release_url(
-                "https://github.com/RongleCat/grok-app/releases/tag/v0.1.7"
+                "https://github.com/iotserver24/supercharge-releases/releases/tag/v0.1.7"
             )
             .as_deref(),
             Some("v0.1.7")
         );
         assert_eq!(
             extract_tag_from_release_url(
-                "https://github.com/RongleCat/grok-app/releases/tag/0.2.0?foo=1#sec"
+                "https://github.com/iotserver24/supercharge-releases/releases/tag/0.2.0?foo=1#sec"
             )
             .as_deref(),
             Some("0.2.0")
         );
         assert_eq!(
-            extract_tag_from_release_url("/RongleCat/grok-app/releases/tag/v1.0.0").as_deref(),
+            extract_tag_from_release_url("/iotserver24/supercharge-releases/releases/tag/v1.0.0")
+                .as_deref(),
             Some("v1.0.0")
         );
-        assert!(
-            extract_tag_from_release_url("https://github.com/RongleCat/grok-app/releases")
-                .is_none()
-        );
+        assert!(extract_tag_from_release_url(
+            "https://github.com/iotserver24/supercharge-releases/releases"
+        )
+        .is_none());
         assert!(extract_tag_from_release_url("https://example.com/nope").is_none());
     }
 
@@ -604,7 +665,7 @@ mod tests {
         let c = build_check_from_tag(
             "0.1.5",
             "v0.1.7",
-            "https://github.com/RongleCat/grok-app/releases/tag/v0.1.7",
+            "https://github.com/iotserver24/supercharge-releases/releases/tag/v0.1.7",
         );
         assert!(c.update_available);
         assert_eq!(c.latest_version, "0.1.7");

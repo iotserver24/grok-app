@@ -3,14 +3,14 @@
 //! When the interactive agent runs a text-only custom main model (DeepSeek),
 //! vision / web_search / X tools must **not** share that process's auth or
 //! base_url. This module prepares an isolated `GROK_HOME` (official auth +
-//! grok-4.5) and runs short **ACP** jobs (preferred) or `grok -p` fallback:
+//! grok-4.5) and runs short **ACP** jobs (preferred) or `supercharge -p` fallback:
 //!
 //! - image description
 //! - web_search
 //! - all `x_*` tools (keyword / semantic / user / thread)
 //!
 //! Prefer ACP (`agent stdio` under `agent-home-official`) so Host can bridge
-//! stream / tool progress into Chat chips. Fall back to `grok -p` when ACP
+//! stream / tool progress into Chat chips. Fall back to `supercharge -p` when ACP
 //! spawn fails.
 //!
 //! Never writes official `auth.json` into the main agent-home while a custom
@@ -1222,14 +1222,7 @@ pub fn main_route_is_custom() -> bool {
 /// - official credentials available (for the side-channel home)
 /// - **custom main route** (never inject on official subscription)
 pub fn should_inject_mcp_for_main() -> bool {
-    let settings = store::load_settings();
-    if !settings.official_aux_inject {
-        return false;
-    }
-    if !main_route_is_custom() {
-        return false;
-    }
-    official_aux_available()
+    false
 }
 
 /// When inject is on: only load `official-aux` (default), unless user opts into
@@ -1254,7 +1247,7 @@ pub fn native_media_tools_to_disallow_on_custom_main() -> &'static [&'static str
 
 /// Merge settings denylist with official-aux inject denylist (custom main only).
 ///
-/// Note: CLI `--disallowed-tools` is **headless-only** (`grok -p`). ACP
+/// Note: CLI `--disallowed-tools` is **headless-only** (`supercharge -p`). ACP
 /// `agent stdio` often ignores it, so custom main also installs a PreToolUse
 /// hook via [`sync_native_media_block_hook`].
 pub fn merge_disallowed_tools_for_main(settings_tools: &[String]) -> Vec<String> {
@@ -1300,7 +1293,7 @@ pub fn native_media_block_hook_script_body_with(block_image_read: bool) -> Strin
     // Fail-open (exit 0, empty) if python missing or parse fails.
     format!(
         r#"#!/bin/sh
-# Managed by Grok App — do not edit; recreated on spawn when inject is on.
+# Managed by Supercharge App — do not edit; recreated on spawn when inject is on.
 # Denies: bare image_gen/image_edit/video tools; read_file of image extensions.
 f=$(mktemp 2>/dev/null) || exit 0
 cat >"$f" 2>/dev/null || {{ rm -f "$f"; exit 0; }}
@@ -1535,15 +1528,15 @@ pub fn inject_session_rules() -> Option<String> {
     Some(official_aux_session_rules_text().trim().to_string())
 }
 
-/// Narrow path-citation rules for Grok App UI (all routes).
+/// Narrow path-citation rules for Supercharge App UI (all routes).
 ///
 /// Soft guidance only — Host still normalizes shell escapes / rejects site-root
 /// paths. Prefer disambiguated project-relative code paths; absolute only for
-/// local media. Always-on via [`merge_extra_rules`] → `grok --rules`.
+/// local media. Always-on via [`merge_extra_rules`] → `supercharge --rules`.
 pub fn path_citation_session_rules() -> &'static str {
     // Keep compact: injected on every session spawn. Inline backticks only —
     // fenced ``` blocks are NOT turned into FilePathCards in the chat UI.
-    r#"Path citations (Grok App UI — so path cards / previews work):
+    r#"Path citations (Supercharge App UI — so path cards / previews work):
 - Cite paths as **inline** backticks only: `path/to/file.ext`. One path per backtick span.
 - Do **not** put the only path citation inside a fenced code block (``` … ``` / ```text). Fenced blocks stay plain text and are not clickable path cards. Fences are for multi-line content previews, not for path handoff.
 - Do **not** write tool-journal forms in user-facing prose (`input:/abs/path`, `tool_step|…`, shell-only dumps). Cite the path for the human, not as a tool field.

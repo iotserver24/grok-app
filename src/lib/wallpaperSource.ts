@@ -1,14 +1,9 @@
-/**
- * Wallpaper source helpers — X search + Imagine gallery types and pure logic.
- */
+/** Wallpaper source helpers for generic remote providers and the local library. */
 
 export type WallpaperSourceKind =
-  | "x"
   | "web"
   | "openverse"
   | "pexels"
-  | "imagine"
-  | "grok_album"
   | "library";
 
 export type WallpaperGalleryItem = {

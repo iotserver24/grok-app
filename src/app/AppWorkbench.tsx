@@ -299,12 +299,6 @@ import {
   type ShortcutRemapMap,
 } from "@/lib/shortcutRemap";
 import {
-  loadVoiceHotkeyEnabled,
-  shouldFireLiveVoiceHotkey,
-  VOICE_HOTKEY_CHANGED_EVENT,
-  VOICE_HOTKEY_STORAGE_KEY,
-} from "@/lib/voiceHotkeyPref";
-import {
   listenForNativeNotifyClicks,
   setDesktopNotifySessionFocusHandler,
 } from "@/lib/desktopNotify";
@@ -584,15 +578,6 @@ import {
   type SettingsSectionId,
 } from "@/components/SettingsPage";
 import { isSettingsSectionId } from "@/lib/settingsCatalog";
-import {
-  loadCachedSuperGrokBrand,
-  resolveWelcomeBrandKind,
-  saveCachedSuperGrokBrand,
-  superGrokBrandKind,
-} from "@/lib/accountUi";
-import {
-  type SuperGrokBrandKind,
-} from "@/components/SuperGrokMark";
 import {
   DeepSeekFullMark,
   OpenCodeWordmark,
@@ -1071,7 +1056,6 @@ export function AppWorkbench() {
   /** Filled after useVoiceDictation; shortcuts read this at keydown time. */
   const voiceStealsEscapeRef = useRef(false);
   const voiceNotifyRef = useRef<(msg: string, ms?: number) => void>(() => {});
-  const voiceSignedInRef = useRef(false);
   const [goalMode, setGoalMode] = useState(false);
   /** Per-session (or draft) JSON Schema for structured output. */
   const [sessionJsonSchema, setSessionJsonSchema] = useState<string | null>(
@@ -1295,7 +1279,6 @@ export function AppWorkbench() {
     toggleBottomTerminal: () => {},
     toggleVoice: () => {},
     cancelVoice: () => {},
-    startLiveVoice: () => {},
     stopGeneration: () => {},
     /** Open a sidebar session by id (j/k nav + tray). */
     openSessionById: (_id: string) => {},
@@ -1321,24 +1304,6 @@ export function AppWorkbench() {
   );
   const shortcutRemapsRef = useRef<ShortcutRemapMap>(shortcutRemaps);
   shortcutRemapsRef.current = shortcutRemaps;
-  /** Live Voice catalog hotkey on/off (localStorage; Settings → Voice). */
-  const [voiceHotkeyEnabled, setVoiceHotkeyEnabled] = useState(() =>
-    typeof localStorage !== "undefined" ? loadVoiceHotkeyEnabled() : true,
-  );
-  const voiceHotkeyEnabledRef = useRef(voiceHotkeyEnabled);
-  voiceHotkeyEnabledRef.current = voiceHotkeyEnabled;
-  useEffect(() => {
-    const reload = () => setVoiceHotkeyEnabled(loadVoiceHotkeyEnabled());
-    window.addEventListener(VOICE_HOTKEY_CHANGED_EVENT, reload);
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === VOICE_HOTKEY_STORAGE_KEY || e.key === null) reload();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => {
-      window.removeEventListener(VOICE_HOTKEY_CHANGED_EVENT, reload);
-      window.removeEventListener("storage", onStorage);
-    };
-  }, []);
   useEffect(() => {
     const reload = () => setShortcutRemaps(loadShortcutRemaps());
     window.addEventListener(SHORTCUT_REMAP_CHANGED_EVENT, reload);
@@ -1462,9 +1427,6 @@ export function AppWorkbench() {
           typing,
         },
         shortcutRemapsRef.current,
-        {
-          voiceHotkeyEnabled: voiceHotkeyEnabledRef.current,
-        },
       );
       if (!matched) return;
       e.preventDefault();
@@ -1508,13 +1470,6 @@ export function AppWorkbench() {
           return;
         case "sideTerminal":
           shortcutHandlersRef.current.toggleBottomTerminal();
-          return;
-        case "liveVoice":
-          // Defense in depth: Settings can disable only this hotkey.
-          if (!shouldFireLiveVoiceHotkey(voiceHotkeyEnabledRef.current)) {
-            return;
-          }
-          shortcutHandlersRef.current.startLiveVoice();
           return;
         default:
           return;
@@ -1846,12 +1801,8 @@ export function AppWorkbench() {
     setExperimentalMemory,
     twoPassCompactionEnabled,
     setTwoPassCompactionEnabled,
-    voiceId,
-    setVoiceId,
     voiceDictationAutoSend,
     setVoiceDictationAutoSend,
-    voiceKeepAgentsOnEnd,
-    setVoiceKeepAgentsOnEnd,
     sttEngine,
     setSttEngine,
     sttCustomBaseUrl,
@@ -1924,12 +1875,9 @@ export function AppWorkbench() {
   const sendRef = useRef<(() => Promise<void>) | null>(null);
   const {
     voice,
-    liveVoiceOpen,
-    setLiveVoiceOpen,
     voiceGate,
     cancelVoice,
     toggleVoice,
-    startLiveVoice,
     voiceStealsEscape: voiceStealsEscapeNow,
     refreshVoiceGate,
   } = useVoiceDictation({
@@ -1943,7 +1891,7 @@ export function AppWorkbench() {
     refreshSessions,
     sttEngine,
     sttCustomBaseUrl,
-    signedInRef: voiceSignedInRef,
+    signedInRef: { current: true },
     notifyRef: voiceNotifyRef,
   });
   voiceStealsEscapeRef.current = voiceStealsEscapeNow;
@@ -2023,7 +1971,6 @@ export function AppWorkbench() {
       taskBoardOpen ||
       opsEntryOpen ||
       streamStall != null ||
-      liveVoiceOpen ||
       mainPane === "kanban",
     viewedSessionId: session.sessionId,
   });
@@ -2122,35 +2069,10 @@ export function AppWorkbench() {
     sideExpanded: hideChatForSideExpand,
   });
   const accountQuotaHostRef = useRef(createAccountQuotaChromeHost());
-  const {
-    account,
-    accountLoading,
-    accountBusy,
-    accountHeatmapError,
-    accountProbeError,
-    loginHint,
-    savedAccounts,
-    activeAccountId,
-    accountQuotas,
-    applyAccountSnapshot,
-    runWithAccountBusy,
-    refreshAccount,
-    refreshSavedAccounts,
-    refreshAccountQuotas,
-    runAccountLogin,
-    cancelAccountLogin,
-    submitAccountLoginCode,
-    runSaveAccount,
-    runAddAccount,
-    runSwitchAccount,
-    runRemoveAccount,
-    runAccountLogout,
-  } = useAccountQuotaChrome({
+  const { account, applyAccountSnapshot, refreshAccount } = useAccountQuotaChrome({
     hostRef: accountQuotaHostRef,
     manualCliPath,
-    accountSettingsOpen: settingsOpen && settingsSection === "account",
   });
-  voiceSignedInRef.current = !!account?.profile?.signedIn;
   useEffect(() => {
     void refreshVoiceGate();
   }, [account?.profile?.signedIn, refreshVoiceGate]);
@@ -3919,7 +3841,7 @@ export function AppWorkbench() {
           sessionId: null,
           title: auto.title || tr("session.new"),
           state: "idle",
-          backend: "grok_agent_stdio",
+          backend: "supercharge_agent_stdio",
         });
         {
           const idle = { ...IDLE_SNAPSHOT };
@@ -4343,7 +4265,7 @@ export function AppWorkbench() {
                 sessionId: prev.sessionId,
                 title: prev.title,
                 state: "idle",
-                backend: prev.backend || "grok_agent_stdio",
+                backend: prev.backend || "supercharge_agent_stdio",
               }
             : prev,
         );
@@ -6796,12 +6718,7 @@ export function AppWorkbench() {
     [projectSpaces, setAppDialog, showToast, tr],
   );
 
-  const onLiveVoiceClassifiedNotice = useCallback(
-    (message: string) => {
-      showToast(message, 4800);
-    },
-    [showToast],
-  );
+
 
   const applyWallpaperChoice = (
     record: Parameters<typeof applyWallpaperChoiceBase>[0],
@@ -8869,10 +8786,6 @@ export function AppWorkbench() {
           case "automations":
             navigateAutomations();
             return;
-          case "live-voice":
-          case "liveVoice":
-            startLiveVoice();
-            return;
           case "settings":
             navigateSettings();
             return;
@@ -9012,7 +8925,7 @@ export function AppWorkbench() {
   }, [messages, showToast]);
 
   /**
-   * New empty draft only: lift composer and SuperGrok brand.
+   * New empty draft only: lift the composer and active product/provider brand.
    * Existing sessions (even with empty journal) must not look like a fresh chat.
    */
   const welcomeSession =
@@ -9032,11 +8945,7 @@ export function AppWorkbench() {
     !journalPending &&
     session.state !== "streaming" &&
     session.state !== "connecting";
-  // Live billing can take seconds (quota network). Cache last mark so the
-  // welcome logo paints immediately — the SVG itself is inline, not a fetch.
-  const [cachedBrandKind, setCachedBrandKind] =
-    useState<SuperGrokBrandKind | null>(() => loadCachedSuperGrokBrand());
-  /** Active inference channel: custom relay identity replaces official account chrome. */
+  /** Active inference channel: custom relay identity replaces the product mark. */
   const [activeCustomProvider, setActiveCustomProvider] =
     useState<api.CustomProvider | null>(null);
   /** Session-memory DeepSeek (etc.) balance for sidebar footer / UserMenu. */
@@ -9076,32 +8985,31 @@ export function AppWorkbench() {
           if (!res?.models?.length) return;
           // Full merge so official live windows (500k) replace cold-start null
           // / stale catalog values — never leave a silent 200k official default.
-          setAvailableModels((prev) => {
-            const prevById = new Map(prev.map((m) => [m.id, m]));
-            return res.models.map((m) => {
-              const prior = prevById.get(m.id);
-              return {
-                id: m.id,
-                label: m.label || m.id,
-                source: m.source,
-                isDefault: m.isDefault,
-                reasoningEfforts:
-                  m.reasoningEfforts?.length
-                    ? m.reasoningEfforts.map((e) => ({
-                        id: e.id,
-                        value: e.value,
-                        label: e.label,
-                        description: e.description,
-                        isDefault: e.isDefault,
-                      }))
-                    : prior?.reasoningEfforts,
-                contextWindow:
-                  m.contextWindow != null && m.contextWindow > 0
-                    ? m.contextWindow
-                    : (prior?.contextWindow ?? null),
-              };
-            });
-          });
+          const nextModels = res.models.map((m) => ({
+            id: m.id,
+            label: m.label || m.id,
+            source: m.source,
+            isDefault: m.isDefault,
+            reasoningEfforts: m.reasoningEfforts?.map((e) => ({
+              id: e.id,
+              value: e.value,
+              label: e.label,
+              description: e.description,
+              isDefault: e.isDefault,
+            })),
+            contextWindow:
+              m.contextWindow != null && m.contextWindow > 0
+                ? m.contextWindow
+                : null,
+          }));
+          setAvailableModels(nextModels);
+          setModelId((current) =>
+            isValidModelId(current, nextModels)
+              ? current
+              : res.defaultModelId && isValidModelId(res.defaultModelId, nextModels)
+                ? res.defaultModelId
+                : pickDefaultModelId(nextModels),
+          );
         })
         .catch(() => {});
     }
@@ -9491,42 +9399,11 @@ export function AppWorkbench() {
     },
     [activeCustomProvider, refreshProviderRoute, showToast],
   );
-  const liveBrandKind = useMemo(
-    () =>
-      superGrokBrandKind(
-        account?.billing,
-        !!account?.profile?.signedIn,
-      ),
-    [account?.billing, account?.profile?.signedIn],
-  );
-  useEffect(() => {
-    // Do not cache Heavy while on a custom route — welcome mark is always SuperGrok.
-    if (customRouteActive) return;
-    if (liveBrandKind) {
-      saveCachedSuperGrokBrand(liveBrandKind);
-      setCachedBrandKind(liveBrandKind);
-      return;
-    }
-    if (account && !account.profile.signedIn) {
-      saveCachedSuperGrokBrand(null);
-      setCachedBrandKind(null);
-    }
-  }, [liveBrandKind, account, customRouteActive]);
-  const welcomeBrandKind = useMemo(
-    () =>
-      resolveWelcomeBrandKind(liveBrandKind, cachedBrandKind, {
-        accountReady: account != null,
-        signedIn: !!account?.profile?.signedIn,
-        customRoute: customRouteActive,
-      }),
-    [liveBrandKind, cachedBrandKind, account, customRouteActive],
-  );
-
   /**
    * Preset provider wordmark on the welcome composer.
    * DeepSeek → full DeepSeek wordmark; OpenCode → theme-aware wordmark;
    * Volcengine Ark → logo + “火山方舟”; Zhipu → logo + “智谱”;
-   * every other channel keeps SuperGrok.
+   * every other channel keeps the Supercharge product mark.
    */
   const welcomeProviderBrandNode = useMemo(() => {
     if (!customRouteActive) return null;
@@ -9553,7 +9430,7 @@ export function AppWorkbench() {
     composerWrapRef,
     setComposerFloatPad,
     mainPane === "chat",
-    `${attachments.length}:${showComposerPlus}:${messages.length}:${welcomeSession}:${String(welcomeBrandKind)}`,
+    `${attachments.length}:${showComposerPlus}:${messages.length}:${welcomeSession}:${customRouteActive}`,
   );
 
   const sidebarPaint =
@@ -9744,7 +9621,7 @@ export function AppWorkbench() {
               sessionId,
               title: prev.title,
               state: "idle",
-              backend: prev.backend || "grok_agent_stdio",
+              backend: prev.backend || "supercharge_agent_stdio",
             }
           : prev,
       );
@@ -9917,14 +9794,8 @@ export function AppWorkbench() {
   }
   {
     const h = accountQuotaHostRef.current;
-    h.tr = tr;
-    h.showToast = showToast;
-    h.setAppDialog = setAppDialog;
     h.noteAccountConnected = ({ auth, cliFound }) => {
       setSetup((s) => ({ ...s, auth, cli: cliFound || s.cli }));
-    };
-    h.resetFocusedSession = () => {
-      setSession({ ...IDLE_SNAPSHOT });
     };
   }
   {
@@ -10528,9 +10399,6 @@ export function AppWorkbench() {
     cancelVoice: () => {
       cancelVoice();
     },
-    startLiveVoice: () => {
-      startLiveVoice();
-    },
     stopGeneration: () => {
       void stop();
     },
@@ -11087,34 +10955,6 @@ export function AppWorkbench() {
       trustProject,
     ],
   );
-
-  /** Import markdown/JSON transcript as a new local session (from PR #24). */
-  const importChatTranscript = useCallback(async () => {
-    if (!api.isTauri()) {
-      showToast(tr("error.needTauri"));
-      return;
-    }
-    await runWithAccountBusy(async () => {
-      const created = await api.sessionImportTranscriptFile(
-        null,
-        activeProject?.id ?? null,
-      );
-      if (!created) return;
-      await refreshSessions();
-      const list = (await api.sessionsList()) as SessionRow[];
-      const hit = list.find((s) => s.id === created.id);
-      if (hit) {
-        const proj =
-          projects.find((p) => p.id === (hit.projectId ?? undefined)) ?? null;
-        void openSession(hit, proj ?? undefined);
-      }
-    }).catch((e) => {
-      showToast(
-        `${tr("account.importChatFailed")}: ${String(e)}`,
-        5000,
-      );
-    });
-  }, [activeProject?.id, projects, runWithAccountBusy, showToast, tr]);
 
   const unarchivedAppSessionCount = sessions.filter((s) => !s.archived).length;
   const linkedAgentIds = sessions
@@ -11758,7 +11598,6 @@ export function AppWorkbench() {
         escapeStopLiveRef.current.askUserOpen ||
         escapeStopLiveRef.current.slashOrMenuOpen ||
         escapeStopLiveRef.current.promptHistoryOpen ||
-        liveVoiceOpen ||
         showJsonSchemaModal ||
         phoneAccountOpen ||
         sessionSelectMode ||
@@ -11981,7 +11820,6 @@ export function AppWorkbench() {
               cliAuthPresent: false,
             }
           }
-          onAccountLoginOauth={() => runAccountLogin("oauth")}
           onComplete={(cli) => {
             setCliInfo(mapProbeToCliInfo(cli));
             if (cli.path) setManualCliPath(cli.path);
@@ -12003,13 +11841,7 @@ export function AppWorkbench() {
       {settingsOpen ? (
       <Suspense fallback={null}>
       <WorkbenchSettingsStage
-        account={account}
-        accountBusy={accountBusy}
-        accountHeatmapError={accountHeatmapError}
-        accountLoading={accountLoading}
-        accountProbeError={accountProbeError}
         acpServerAddr={acpServerAddr}
-        activeAccountId={activeAccountId}
         activeProject={activeProject}
         agentCatalog={agentCatalog}
         agentIdleMinutes={agentIdleMinutes}
@@ -12035,7 +11867,6 @@ export function AppWorkbench() {
         availableModels={availableModels}
         backgroundWaitPolicy={backgroundWaitPolicy}
         backgroundWaitTimeoutSec={backgroundWaitTimeoutSec}
-        cancelAccountLogin={cancelAccountLogin}
         cliAgentSkewRepairing={cliAgentSkewRepairing}
         cliInfo={cliInfo}
         closeToTray={closeToTray}
@@ -12051,7 +11882,6 @@ export function AppWorkbench() {
         goalOrchUiEnabled={goalOrchUiEnabled}
         handleClearAllSessionMutes={handleClearAllSessionMutes}
         handleClearAllSessionUnread={handleClearAllSessionUnread}
-        importChatTranscript={importChatTranscript}
         includePartialMessages={includePartialMessages}
         keepTrayForSchedules={keepTrayForSchedules}
         lastCliChecksumVerified={lastCliChecksumVerified}
@@ -12059,7 +11889,6 @@ export function AppWorkbench() {
         launchAtLogin={launchAtLogin}
         locale={locale}
         localePreference={localePreference}
-        loginHint={loginHint}
         manualCliPath={manualCliPath}
         maxAgentTurns={maxAgentTurns}
         maxConcurrentAgents={maxConcurrentAgents}
@@ -12096,14 +11925,7 @@ export function AppWorkbench() {
         welcomeMotionEnabled={welcomeMotionEnabled}
         setWelcomeMotionEnabled={setWelcomeMotionEnabled}
         restoreSessions={restoreSessions}
-        runAccountLogin={runAccountLogin}
-        runAccountLogout={runAccountLogout}
-        runAddAccount={runAddAccount}
-        runRemoveAccount={runRemoveAccount}
-        runSaveAccount={runSaveAccount}
-        runSwitchAccount={runSwitchAccount}
         sandboxProfile={sandboxProfile}
-        savedAccounts={savedAccounts}
         session={session}
         sessionDataMode={sessionDataMode}
         sessions={sessions}
@@ -12179,8 +12001,6 @@ export function AppWorkbench() {
         setTwoPassCompactionEnabled={setTwoPassCompactionEnabled}
         setUseLeader={setUseLeader}
         setVoiceDictationAutoSend={setVoiceDictationAutoSend}
-        setVoiceId={setVoiceId}
-        setVoiceKeepAgentsOnEnd={setVoiceKeepAgentsOnEnd}
         setWinTaskbarOverlay={setWinTaskbarOverlay}
         setWindowAlwaysOnTop={setWindowAlwaysOnTop}
         setWorkflowsEnabled={setWorkflowsEnabled}
@@ -12203,7 +12023,6 @@ export function AppWorkbench() {
         sttZhScript={sttZhScript}
         subagentWorktreeSnapshotEnabled={subagentWorktreeSnapshotEnabled}
         subagentsEnabled={subagentsEnabled}
-        submitAccountLoginCode={submitAccountLoginCode}
         theme={theme}
         themePreference={themePreference}
         themeSchedule={themeSchedule}
@@ -12216,8 +12035,6 @@ export function AppWorkbench() {
         unreadSessionIds={unreadSessionIds}
         useLeader={useLeader}
         voiceDictationAutoSend={voiceDictationAutoSend}
-        voiceId={voiceId}
-        voiceKeepAgentsOnEnd={voiceKeepAgentsOnEnd}
         wallpaperRecord={wallpaperRecord}
         wallpaperScrim={wallpaperScrim}
         wallpaperBlur={wallpaperBlur}
@@ -12308,26 +12125,14 @@ export function AppWorkbench() {
           closeImmediately={settingsOpen || layout.sidebarCollapsed}
           theme={theme}
           themePreference={themePreference}
-          account={account}
-          accountBusy={accountBusy}
           providerBalanceCache={providerBalanceCache}
           providerBalanceBusy={providerBalanceBusy}
           providerBalanceError={providerBalanceError}
           loadProviderBalance={loadProviderBalance}
           applyThemeChoice={applyThemeChoice}
           onSettings={() => navigateSettings()}
-          onAccountSettings={() => navigateSettings("account")}
           onTutorial={() => setShowProductTutorial(true)}
-          onLogin={() => void runAccountLogin("oauth")}
-          onLogout={() => void runAccountLogout()}
-          savedAccounts={savedAccounts}
-          activeAccountId={activeAccountId}
-          accountQuotas={accountQuotas}
-          onSwitchAccount={(id) => void runSwitchAccount(id)}
           onUserMenuOpened={() => {
-            void refreshAccount({ refreshBilling: !customRouteActive });
-            void refreshSavedAccounts();
-            if (!customRouteActive) void refreshAccountQuotas();
             if (
               activeCustomProvider &&
               supportsProviderBalance({
@@ -12508,7 +12313,7 @@ export function AppWorkbench() {
               }}
               onAiCreate={() => {
               void newChat(null, {
-              seedDraft: aiCreateSeedPrompt("Grok"),
+              seedDraft: aiCreateSeedPrompt("Supercharge"),
               switchToChat: true,
               automationSetup: true,
               });
@@ -12658,7 +12463,6 @@ export function AppWorkbench() {
             worktreeEntryForPath={worktreeEntryForPath}
           >
           <WorkbenchComposerColumn
-            account={account}
             activeProject={activeProject}
             addProjectFromPicker={addProjectFromPicker}
             applyAtFile={applyAtFile}
@@ -12737,7 +12541,6 @@ export function AppWorkbench() {
             layout={layout}
             liveAt={liveAt}
             liveSlash={liveSlash}
-            liveVoiceOpen={liveVoiceOpen}
             locale={locale}
             mode={mode}
             modelId={modelId}
@@ -12840,7 +12643,6 @@ export function AppWorkbench() {
             voice={voice}
             voiceDictationAutoSend={voiceDictationAutoSend}
             voiceGate={voiceGate}
-            welcomeBrandKind={welcomeBrandKind}
             welcomeProviderBrandNode={welcomeProviderBrandNode}
             welcomeSession={welcomeSession}
             welcomeMotionEnabled={welcomeMotionEnabled}
@@ -13113,7 +12915,6 @@ export function AppWorkbench() {
         showShortcuts={showShortcuts}
         composerSendKeyPref={composerSendKeyPref}
         shortcutRemaps={shortcutRemaps}
-        voiceHotkeyEnabled={voiceHotkeyEnabled}
         closeShortcuts={() => setShowShortcuts(false)}
         showProductTutorial={showProductTutorial}
         closeProductTutorial={() => {
@@ -13122,69 +12923,9 @@ export function AppWorkbench() {
         }}
         gateReady={appGate === "ready"}
         setupOpen={appGate === "setup"}
-        liveVoiceOpen={liveVoiceOpen}
-        voiceLocale={resolveLocale(locale)}
-        voiceProjectPath={effectiveProjectPath}
-        voiceProjectId={activeProject?.id ?? null}
-        voiceProjectName={
-          activeProject
-            ? projectDisplayName(activeProject, tr)
-            : tr("composer.noProject")
-        }
-        voiceId={voiceId}
-        voiceKeepAgentsOnEnd={voiceKeepAgentsOnEnd}
-        voiceHasActiveSession={Boolean(session.sessionId)}
-        voiceHasAuth={voiceGate.available}
-        voiceSessions={sessions.map((s) => ({
-          id: s.id,
-          title: s.title || tr("session.untitled"),
-          status: liveMap[s.id]?.state ?? "idle",
-        }))}
-        closeLiveVoice={() => setLiveVoiceOpen(false)}
-        onLiveVoiceClassifiedNotice={onLiveVoiceClassifiedNotice}
-        onSendVoiceTranscriptAsPrompt={
-          session.sessionId
-            ? async (prompt) => {
-                await executeSend({
-                  storedDisplay: prompt,
-                  att: [],
-                  goalMode: false,
-                });
-              }
-            : undefined
-        }
-        onVoiceFocusSession={(id) => {
-          setLiveVoiceOpen(false);
-          void (async () => {
-            await refreshSessions();
-            let row = sessions.find((s) => s.id === id) ?? null;
-            if (!row) {
-              try {
-                const list = await api.sessionsList();
-                const hit = list.find((s) => s.id === id);
-                if (hit) {
-                  row = normalizeSessionRow({
-                    ...hit,
-                    title: hit.title || tr("session.untitled"),
-                  });
-                }
-              } catch {
-                /* ignore */
-              }
-            }
-            if (row) {
-              const proj =
-                projects.find((p) => p.id === row!.projectId) ?? activeProject;
-              void openSession(row, proj ?? undefined);
-            } else {
-              showToast(tr("voice.sessionMissing"), 3500);
-            }
-          })();
-        }}
       />
 
       <WorkbenchSessionModals
-        account={account}
         agentDashboardOpen={agentDashboardOpen}
         agentDashboardRows={agentDashboardRows}
         batchAgentsOpen={batchAgentsOpen}
@@ -13198,7 +12939,6 @@ export function AppWorkbench() {
         confirmClearPlanHistory={confirmClearPlanHistory}
         confirmClearSessionNoteModal={confirmClearSessionNoteModal}
         confirmRewindToPrompt={confirmRewindToPrompt}
-        customRouteActive={customRouteActive}
         effectiveProjectPath={effectiveProjectPath}
         effort={effort}
         forceCloseSessionNoteModal={forceCloseSessionNoteModal}

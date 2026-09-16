@@ -1,4 +1,4 @@
-//! Discover selectable Grok Build agent definition names for Settings.
+//! Discover selectable Supercharge agent definition names for Settings.
 //!
 //! Sources mirror CLI `--agent <NAME>` resolution:
 //! - Built-ins: explore, plan, general-purpose

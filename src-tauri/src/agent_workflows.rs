@@ -1,21 +1,21 @@
-//! Grok Build workflows (`workflows_enabled`) — agent-home config sync +
+//! Supercharge workflows (`workflows_enabled`) — agent-home config sync +
 //! discovery + soft-fail headless run.
 //!
 //! Config key (top-level, independent agent-home only):
 //! - `workflows_enabled` (bool)
 //!
-//! Workflows are Rhai orchestration scripts run by the Grok Build **`workflow`
-//! tool** (agent tool). There is **no** top-level `grok workflow` CLI
-//! subcommand (probed against Grok Build 0.2.117). Scripts live under
-//! `~/.grok/workflows/*.rhai` and project `.grok/workflows/*.rhai`.
+//! Workflows are Rhai orchestration scripts run by the Supercharge **`workflow`
+//! tool** (agent tool). There is **no** top-level `supercharge workflow` CLI
+//! subcommand. Scripts live under `~/.supercharge/workflows/*.rhai` and project
+//! `.supercharge/workflows/*.rhai`.
 //!
 //! App surfaces:
 //! - enable toggle → independent agent-home `config.toml`
 //! - read-only discovery of definition names
-//! - soft-fail **headless** invoke via short `grok -p` that must call the
+//! - soft-fail **headless** invoke via short `supercharge -p` that must call the
 //!   `workflow` tool by registered name (`validate_only` smoke by default)
 //!
-//! No visual workflow editor. Shared mode never rewrites `~/.grok/config.toml`.
+//! No visual workflow editor. Shared mode never rewrites `~/.supercharge/config.toml`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -43,7 +43,7 @@ pub fn set_workflows_enabled_in_toml(text: &str, enabled: bool) -> String {
     set_top_level_bool(text, CONFIG_KEY, enabled)
 }
 
-/// Write the config key into App agent-home (independent GROK_HOME only).
+/// Write the config key into App agent-home (independent SUPERCHARGE_HOME only).
 pub fn sync_workflows_to_agent_profile(
     session_data_mode: &str,
     enabled: bool,
@@ -146,21 +146,21 @@ fn scope_rank(scope: &str) -> u8 {
 /// Read-only soft-fail discovery of workflow `.rhai` names.
 ///
 /// Scans (in order, de-dup by name case-insensitive, project wins):
-/// - `<project>/.grok/workflows`
-/// - `~/.grok/workflows`
-/// - independent agent-home `workflows/` when different from `~/.grok`
+/// - `<project>/.supercharge/workflows`
+/// - `~/.supercharge/workflows`
+/// - independent agent-home `workflows/` when different from `~/.supercharge`
 pub fn discover_workflows(
     project_path: Option<&str>,
     session_data_mode: &str,
 ) -> DiscoverWorkflowsResult {
-    let home = crate::process_util::user_home();
-    let user_dir = home.join(".grok").join("workflows");
+    let shared_home = crate::paths::shared_supercharge_home();
+    let user_dir = shared_home.join("workflows");
     let project_dir = project_path
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .map(|p| PathBuf::from(p).join(".grok").join("workflows"));
+        .map(|p| PathBuf::from(p).join(".supercharge").join("workflows"));
 
-    let active_home = crate::paths::resolve_agent_grok_home(session_data_mode);
+    let active_home = crate::paths::resolve_agent_supercharge_home(session_data_mode);
     let agent_home_dir = active_home.join("workflows");
 
     let mut items = Vec::new();
@@ -198,8 +198,7 @@ pub fn discover_workflows(
         } else {
             None
         },
-        create_workflow_skill: home
-            .join(".grok")
+        create_workflow_skill: shared_home
             .join("bundled")
             .join("skills")
             .join("create-workflow")
@@ -220,7 +219,7 @@ pub struct DiscoverWorkflowsResult {
     pub create_workflow_skill: String,
 }
 
-// ── Soft-fail headless run (workflow tool via grok -p) ────────────────────
+// ── Soft-fail headless run (workflow tool via supercharge -p) ─────────────
 
 /// Soft cap on captured log characters returned to the FE (after redaction).
 pub const MAX_RUN_LOG_CHARS: usize = 4_000;
@@ -249,7 +248,7 @@ pub struct WorkflowRunResult {
     pub duration_ms: u64,
     pub cli_path: Option<String>,
     pub cli_version: Option<String>,
-    /// Honesty note: no top-level `grok workflow` subcommand; headless path used.
+    /// Honesty note: no top-level `supercharge workflow` subcommand; headless path used.
     pub invoke_path: String,
 }
 
@@ -378,18 +377,18 @@ pub struct WorkflowCreateResult {
 
 /// Resolve writable workflows directory for create scope.
 ///
-/// - `user` → `~/.grok/workflows` (matches discovery + create-workflow skill)
-/// - `project` → `{project}/.grok/workflows`
+/// - `user` → `~/.supercharge/workflows` (matches discovery + create-workflow skill)
+/// - `project` → `{project}/.supercharge/workflows`
 fn resolve_create_workflows_dir(
     scope: &str,
     project_path: Option<&str>,
 ) -> Result<(PathBuf, String), String> {
     let scope = scope.trim().to_ascii_lowercase();
     match scope.as_str() {
-        "user" | "" => {
-            let home = crate::process_util::user_home();
-            Ok((home.join(".grok").join("workflows"), "user".into()))
-        }
+        "user" | "" => Ok((
+            crate::paths::shared_supercharge_home().join("workflows"),
+            "user".into(),
+        )),
         "project" => {
             let proj = project_path
                 .map(str::trim)
@@ -405,7 +404,10 @@ fn resolve_create_workflows_dir(
             {
                 return Err("invalid project path".into());
             }
-            Ok((root.join(".grok").join("workflows"), "project".into()))
+            Ok((
+                root.join(".supercharge").join("workflows"),
+                "project".into(),
+            ))
         }
         other => Err(format!("unknown workflow scope: {other}")),
     }
@@ -585,8 +587,8 @@ pub const WORKFLOW_RUN_PROGRESS_EVENT: &str = "workflows://run-progress";
 
 /// Soft-fail headless invoke of a registered workflow by name.
 ///
-/// Probe note: Grok Build has no `workflow` subcommand; the App uses short
-/// headless `grok -p` and asks the agent to call the `workflow` tool once.
+/// Probe note: Supercharge has no `workflow` subcommand; the App uses short
+/// headless `supercharge -p` and asks the agent to call the `workflow` tool once.
 /// Default mode is `validate` (`validate_only: true` smoke). Never panics.
 ///
 /// When `app` is provided, emits line-level progress on
@@ -720,9 +722,10 @@ fn run_workflow_inner(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     process_util::apply_cli_env_std(&mut cmd);
-    let grok_home = crate::paths::resolve_agent_grok_home(&settings.session_data_mode);
-    let _ = std::fs::create_dir_all(&grok_home);
-    cmd.env("GROK_HOME", &grok_home);
+    let supercharge_home =
+        crate::paths::resolve_agent_supercharge_home(&settings.session_data_mode);
+    let _ = std::fs::create_dir_all(&supercharge_home);
+    cmd.env("SUPERCHARGE_HOME", &supercharge_home);
     if settings.session_data_mode != "shared" {
         crate::providers::prepare_route_auth_for_agent();
     }
@@ -1003,7 +1006,8 @@ mod tests {
 
     #[test]
     fn create_workflow_template_project_idempotent() {
-        let tmp = std::env::temp_dir().join(format!("grok-wf-create-{}", std::process::id()));
+        let tmp =
+            std::env::temp_dir().join(format!("supercharge-wf-create-{}", std::process::id()));
         let _ = fs::remove_dir_all(&tmp);
         fs::create_dir_all(&tmp).unwrap();
         let r1 = create_workflow_template("demo-wf", "project", Some(tmp.to_str().unwrap()), false)

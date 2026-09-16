@@ -41,7 +41,7 @@ export const AGENT_KANBAN_DEFAULT_COLUMNS: readonly AgentKanbanColumnId[] = [
   "done",
 ] as const;
 
-export const AGENT_KANBAN_PREFS_KEY = "grok-app.agentKanbanPrefs";
+export const AGENT_KANBAN_PREFS_KEY = "supercharge-app.agentKanbanPrefs";
 
 export type AgentKanbanCard = TaskBoardCard & {
   kanbanColumn: AgentKanbanColumnId;

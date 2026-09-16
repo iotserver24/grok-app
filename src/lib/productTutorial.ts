@@ -4,7 +4,7 @@
  */
 
 /** Versioned so copy/step set can ship a re-offer later. */
-export const PRODUCT_TUTORIAL_STORAGE_KEY = "grok.productTutorial.v1";
+export const PRODUCT_TUTORIAL_STORAGE_KEY = "supercharge.productTutorial.v1";
 
 export const PRODUCT_TUTORIAL_VERSION = 1;
 

@@ -47,15 +47,13 @@ afterEach(() => {
 });
 
 describe("useWallpaperSourceHistory", () => {
-  it("keeps bounded source snapshots but never copies authenticated album rows", () => {
+  it("keeps bounded source snapshots", () => {
     const { result } = renderHook(() => useWallpaperSourceHistory());
     act(() => {
       result.current.save("openverse", snapshot());
-      result.current.save("grok_album", snapshot([item("private-album")]));
     });
 
     expect(result.current.get("openverse")?.items).toHaveLength(1);
-    expect(result.current.get("grok_album")?.items).toEqual([]);
 
     act(() => {
       result.current.save(

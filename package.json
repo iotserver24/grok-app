@@ -1,17 +1,18 @@
 {
-  "name": "grok-app",
+  "name": "supercharge-app",
   "private": true,
   "version": "0.2.35",
-  "description": "Desktop workbench for Grok Build CLI (English-first)",
-  "author": "RongleCat",
+  "description": "Supercharge desktop workbench for local coding agents",
+  "author": "Supercharge contributors",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/RongleCat/grok-app.git"
+    "url": "https://github.com/iotserver24/supercharge.git",
+    "directory": "supercharge-app"
   },
-  "homepage": "https://grok-app.com",
+  "homepage": "https://github.com/iotserver24/supercharge-releases",
   "bugs": {
-    "url": "https://github.com/RongleCat/grok-app/issues"
+    "url": "https://github.com/iotserver24/supercharge-releases/issues"
   },
   "type": "module",
   "packageManager": "pnpm@9.15.9",

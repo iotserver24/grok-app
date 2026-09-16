@@ -56,7 +56,7 @@ pub fn init() {
     }
 
     tracing::info!(
-        target: "grok_app::logging",
+        target: "supercharge_app::logging",
         path = %log_dir.display(),
         "diagnostic file logging enabled (daily rotate app.log.YYYY-MM-DD)"
     );
@@ -76,7 +76,7 @@ pub fn sync_diag(message: &str) {
     let day = chrono::Local::now().format("%Y-%m-%d");
     let path = log_dir.join(format!("app.log.{day}"));
     let ts = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true);
-    let line = format!("{ts}  WARN grok_app::logging: {message}\n");
+    let line = format!("{ts}  WARN supercharge_app::logging: {message}\n");
     if let Ok(mut f) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)

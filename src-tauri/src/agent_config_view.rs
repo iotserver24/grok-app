@@ -1,4 +1,4 @@
-//! Safe, redacted viewer for agent `config.toml` (independent agent-home or shared `~/.grok`).
+//! Safe, redacted viewer for agent `config.toml` (independent agent-home or shared `~/.supercharge`).
 //!
 //! View-first only — never returns raw API keys / secrets / bearer tokens.
 //! Path follows active `session_data_mode` (same root as permission rules / MCP).
@@ -23,7 +23,7 @@ pub struct AgentConfigTomlReadResult {
     pub exists: bool,
     /// `independent` | `shared`
     pub mode: String,
-    /// GROK_HOME root for this mode.
+    /// SUPERCHARGE_HOME root for this mode.
     pub grok_home: String,
     /// Full file text with secrets redacted (empty when missing).
     pub text: String,
@@ -35,7 +35,7 @@ pub struct AgentConfigTomlReadResult {
 
 /// Resolve `config.toml` path for the given session data mode.
 ///
-/// Independent → App agent-home; shared → `~/.grok/config.toml`.
+/// Independent → App agent-home; shared → `~/.supercharge/config.toml`.
 pub fn config_toml_path(session_data_mode: &str) -> PathBuf {
     if session_data_mode == "shared" {
         resolve_agent_grok_home(session_data_mode).join("config.toml")
@@ -314,10 +314,10 @@ mod tests {
     }
 
     #[test]
-    fn config_path_shared_is_dot_grok() {
+    fn config_path_shared_is_dot_supercharge() {
         let p = config_toml_path("shared");
         assert!(
-            p.ends_with(".grok/config.toml") || p.ends_with(".grok\\config.toml"),
+            p.ends_with(".supercharge/config.toml") || p.ends_with(".supercharge\\config.toml"),
             "{p:?}"
         );
     }

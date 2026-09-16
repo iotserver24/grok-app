@@ -698,7 +698,7 @@ export const RUNTIME_ENTRIES: readonly SettingsEntry[] = [
       "session id",
       "PATH",
       "~/.local/bin",
-      "grok-app command",
+      "supercharge app command",
       "symlink",
       "会话列表",
       "继续会话",

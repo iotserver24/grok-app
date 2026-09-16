@@ -1,4 +1,3 @@
-
 /// Mark onboarding complete after a config import. Never flips `session_data_mode`
 /// (E05: import ≠ shared — user must switch mode explicitly).
 fn apply_import_onboarding_done(settings: &mut AppSettings) {
@@ -7,17 +6,20 @@ fn apply_import_onboarding_done(settings: &mut AppSettings) {
 
 #[tauri::command]
 pub async fn import_grok_cli_config() -> Result<serde_json::Value, String> {
-    let home = crate::process_util::user_home();
-    let auth = home.join(".grok").join("auth.json");
-    let config = home.join(".grok").join("config.toml");
+    let home = crate::paths::shared_supercharge_home();
+    let auth = home.join("auth.json");
+    let config = home.join("config.toml");
     let mut msg = Vec::new();
     if auth.is_file() {
-        msg.push("Found ~/.grok/auth.json (CLI will use cached_token)".to_string());
+        msg.push(format!(
+            "Found {} (Supercharge CLI will use cached_token)",
+            auth.display()
+        ));
     } else {
-        msg.push("No ~/.grok/auth.json".to_string());
+        msg.push(format!("No Supercharge CLI auth at {}", auth.display()));
     }
     if config.is_file() {
-        msg.push("Found ~/.grok/config.toml".to_string());
+        msg.push(format!("Found {}", config.display()));
     }
     let mut settings = store::load_settings_async().await;
     apply_import_onboarding_done(&mut settings);
@@ -46,8 +48,7 @@ pub async fn import_grok_go_config() -> Result<serde_json::Value, String> {
         let p = std::path::PathBuf::from(&c);
         if p.is_file() {
             let raw = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
-            let v: serde_json::Value =
-                serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+            let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
             // Try common keys without logging secrets
             let mut secrets = store::load_secrets();
             if let Some(key) = v
@@ -135,9 +136,7 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
     let projects = store::load_projects();
     let sessions = store::load_sessions_index();
     let secrets = store::load_secrets();
-    let auth_path_buf = crate::process_util::user_home()
-        .join(".grok")
-        .join("auth.json");
+    let auth_path_buf = crate::paths::shared_supercharge_home().join("auth.json");
     let auth_ok = auth_path_buf.is_file();
     let auth_path = auth_path_buf.display().to_string();
     let data_root_path = crate::paths::app_data_root();
@@ -148,7 +147,7 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
     let backend_default = if crate::acp_client::AcpClient::use_mock() {
         "mock_acp"
     } else {
-        "grok_agent_stdio"
+        "supercharge_agent_stdio"
     };
     let has_official_key = secrets.official_api_key.is_some();
     let has_relay = secrets.relay_base_url.is_some() && secrets.relay_api_key.is_some();
@@ -231,7 +230,7 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
         checks.push(doctor_check(
             "cli",
             level,
-            "Grok Build CLI",
+            "Supercharge CLI",
             format!(
                 "Found {ver} ({}) at {path}{checksum_note}{rec_note}",
                 probe.source
@@ -252,8 +251,8 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
         checks.push(doctor_check(
             "cli",
             "fail",
-            "Grok Build CLI",
-            "Grok Build CLI not found. Install from Settings → Runtime or the setup wizard."
+            "Supercharge CLI",
+            "Supercharge CLI not found. Install from Settings → Runtime or the setup wizard."
                 .into(),
             serde_json::json!({
                 "found": false,
@@ -266,14 +265,14 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
         ));
     }
 
-    // 1a) grok vs agent binary skew (App spawns grok only; TUI/external may use agent).
+    // 1a) Supercharge vs sibling agent binary skew (the App spawns Supercharge).
     if probe.agent_binary_skew {
         checks.push(doctor_check(
             "cli_agent_skew",
             "warn",
             "CLI agent binary skew",
             format!(
-                "grok reports {:?} but sibling agent reports {:?}. App ACP uses grok; \
+                "Supercharge reports {:?} but sibling agent reports {:?}. App ACP uses Supercharge; \
                  external `agent` may be stale. Repair from Settings → Runtime · CLI or reinstall.",
                 probe.version, probe.agent_version
             ),
@@ -287,7 +286,7 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
         ));
     }
 
-    // 1a2) probe `grok --version` vs last live ACP initialize agentVersion.
+    // 1a2) probe `supercharge --version` vs last live ACP initialize agentVersion.
     // Soft warn only — never blocks session open. Empty cache → no finding.
     if probe.acp_agent_version_skew {
         checks.push(doctor_check(
@@ -295,8 +294,8 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
             "warn",
             "CLI vs ACP agentVersion skew",
             format!(
-                "probed grok reports {:?} but last ACP initialize reported {:?}. \
-                 Restart sessions after CLI update, reinstall Grok Build CLI, or \
+                "probed Supercharge reports {:?} but last ACP initialize reported {:?}. \
+                 Restart sessions after CLI update, reinstall Supercharge CLI, or \
                  (API mode) confirm the remote agent binary matches Settings → Runtime.",
                 probe.version, probe.acp_agent_version
             ),
@@ -317,8 +316,7 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
                 "cli_checksum",
                 "ok",
                 "CLI install checksum",
-                "Last App-managed CLI install matched a published SHA-256 sidecar."
-                    .into(),
+                "Last App-managed CLI install matched a published SHA-256 sidecar.".into(),
                 serde_json::json!({ "checksumVerified": true }),
             ));
         } else {
@@ -408,7 +406,7 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
             "warn",
             "Authentication",
             format!(
-                "No CLI auth (~/.grok/auth.json), official API key, or relay configured. Path: {auth_path}"
+                "No Supercharge CLI auth, official API key, or relay configured. Path: {auth_path}"
             ),
             serde_json::json!({
                 "cliAuthJson": auth_ok,
@@ -549,13 +547,11 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
     let (backend_level, backend_detail) = if backend_default == "mock_acp" {
         (
             "warn",
-            "Using mock ACP backend (dev). Production uses grok_agent_stdio.".to_string(),
+            "Using mock ACP backend (dev). Production uses the Supercharge ACP process."
+                .to_string(),
         )
     } else {
-        (
-            "ok",
-            format!("Agent backend: {backend_default}"),
-        )
+        ("ok", format!("Agent backend: {backend_default}"))
     };
     checks.push(doctor_check(
         "backend",
@@ -572,10 +568,7 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
     let (logs_level, logs_detail) = if log_dir_exists {
         ("ok", format!("Logs directory: {log_dir}"))
     } else {
-        (
-            "warn",
-            format!("Logs directory not created yet: {log_dir}"),
-        )
+        ("warn", format!("Logs directory not created yet: {log_dir}"))
     };
     checks.push(doctor_check(
         "logs",
@@ -588,7 +581,7 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
         }),
     ));
 
-    // Grok Build CLI `doctor --json` (terminal/clipboard/color findings).
+    // Supercharge CLI `doctor --json` (terminal/clipboard/color findings).
     // Runs on a blocking pool so slow/hung CLI cannot stall the async runtime.
     let cli_doctor = tauri::async_runtime::spawn_blocking(run_cli_doctor_json)
         .await
@@ -627,13 +620,50 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
     }))
 }
 
-/// Timeout for `grok doctor --json` (host env probes; keep short).
+/// Timeout for `supercharge doctor --json` (host env probes; keep short).
 const CLI_DOCTOR_TIMEOUT_SECS: u64 = 15;
+
+/// Run the discovered Supercharge CLI with the active `SUPERCHARGE_HOME`.
+fn run_supercharge_cli_args(
+    args: &[&str],
+    timeout_secs: u64,
+) -> Result<(String, String, bool), String> {
+    let settings = store::load_settings();
+    let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
+    let Some(cli_path) = probe.path.filter(|_| probe.found) else {
+        return Err("Supercharge CLI not found".into());
+    };
+    let supercharge_home =
+        crate::paths::resolve_agent_supercharge_home(&settings.session_data_mode);
+    let _ = std::fs::create_dir_all(&supercharge_home);
+    let args_owned: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut cmd = std::process::Command::new(&cli_path);
+        cmd.args(&args_owned)
+            .env("SUPERCHARGE_HOME", &supercharge_home);
+        crate::process_util::apply_cli_env_std(&mut cmd);
+        crate::proxy::apply_to_std_command(&mut cmd);
+        let _ = tx.send(cmd.output());
+    });
+
+    match rx.recv_timeout(std::time::Duration::from_secs(timeout_secs)) {
+        Ok(Ok(output)) => Ok((
+            String::from_utf8_lossy(&output.stdout).trim().to_string(),
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            output.status.success(),
+        )),
+        Ok(Err(error)) => Err(format!("Failed to run Supercharge: {error}")),
+        Err(_) => Err(format!(
+            "Supercharge command timed out after {timeout_secs}s"
+        )),
+    }
+}
 
 /// Run probed CLI `doctor --json`. Returns a stable envelope for the UI parser.
 /// Never includes secret values — only CLI doctor facts/findings/probeNotes.
 fn run_cli_doctor_json() -> serde_json::Value {
-    match run_grok_cli_args(&["doctor", "--json"], CLI_DOCTOR_TIMEOUT_SECS) {
+    match run_supercharge_cli_args(&["doctor", "--json"], CLI_DOCTOR_TIMEOUT_SECS) {
         Ok((stdout, stderr, status_ok)) => {
             let trimmed = stdout.trim();
             if trimmed.is_empty() {
@@ -644,7 +674,7 @@ fn run_cli_doctor_json() -> serde_json::Value {
                     return serde_json::json!({
                         "available": false,
                         "error": format!(
-                            "grok CLI does not support `doctor --json`; version {} or newer is required",
+                            "Supercharge CLI does not support `doctor --json`; version {} or newer is required",
                             crate::cli_probe::min_cli_version_str()
                         ),
                         "reason": "cli_too_old",
@@ -654,9 +684,12 @@ fn run_cli_doctor_json() -> serde_json::Value {
                     });
                 }
                 let detail = if stderr.trim().is_empty() {
-                    "grok doctor returned no output".to_string()
+                    "Supercharge doctor returned no output".to_string()
                 } else {
-                    format!("grok doctor returned no JSON: {}", truncate_cli_err(&stderr, 240))
+                    format!(
+                        "Supercharge doctor returned no JSON: {}",
+                        truncate_cli_err(&stderr, 240)
+                    )
                 };
                 return serde_json::json!({
                     "available": false,
@@ -674,7 +707,7 @@ fn run_cli_doctor_json() -> serde_json::Value {
                 }),
                 Err(e) => serde_json::json!({
                     "available": false,
-                    "error": format!("Failed to parse grok doctor JSON: {e}"),
+                    "error": format!("Failed to parse Supercharge doctor JSON: {e}"),
                     "report": serde_json::Value::Null,
                     "exitOk": status_ok,
                     "stdoutPreview": truncate_cli_err(trimmed, 200),
@@ -689,7 +722,7 @@ fn run_cli_doctor_json() -> serde_json::Value {
     }
 }
 
-/// Grok endpoints probed by the network self-check (NEW-02 / NEW-07).
+/// xAI endpoints probed by the network self-check (NEW-02 / NEW-07).
 const NET_PROBE_TARGETS: &[(&str, &str)] = &[
     ("auth", "https://auth.x.ai/.well-known/openid-configuration"),
     ("chat", "https://cli-chat-proxy.grok.com/"),
@@ -705,7 +738,7 @@ pub async fn network_probe() -> Result<serde_json::Value, String> {
     let client = crate::proxy::apply_to_reqwest(reqwest::Client::builder())
         .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("grok-app-net-probe")
+        .user_agent("supercharge-app-net-probe")
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -744,7 +777,7 @@ pub async fn network_probe() -> Result<serde_json::Value, String> {
     }))
 }
 
-/// Headless probe: `grok -p … --output-format streaming-json` (CLI ≥ 0.2.117).
+/// Headless probe: `supercharge -p … --output-format streaming-json` (CLI ≥ 0.2.117).
 /// Soft-gated — older CLIs get a structured "too old" result, not a hard crash.
 /// Returns redacted stdout NDJSON for the Diagnostics ACP-NDJSON panel.
 #[tauri::command]
@@ -816,7 +849,7 @@ pub async fn export_support_bundle(
     save_and_reveal_file(
         tmp,
         "Save support bundle",
-        "grok-app-support.zip",
+        "supercharge-app-support.zip",
         "Zip",
         &["zip"],
     )
@@ -845,17 +878,16 @@ pub async fn export_session_bundle(
         crate::support_bundle::write_session_bundle(&sid_for_zip, runtime)
     });
     // Generous but finite — huge agent trails / slow disks must not hang forever.
-    let tmp = match tokio::time::timeout(std::time::Duration::from_secs(90), zip_fut).await {
-        Ok(join) => join.map_err(|e| e.to_string())??,
-        Err(_) => {
-            return Err(
+    let tmp =
+        match tokio::time::timeout(std::time::Duration::from_secs(90), zip_fut).await {
+            Ok(join) => join.map_err(|e| e.to_string())??,
+            Err(_) => return Err(
                 "diagnostic export timed out while packing files (90s). Try again or free disk."
                     .into(),
-            )
-        }
-    };
+            ),
+        };
     let short: String = sid.chars().take(8).collect();
-    let suggested = format!("grok-app-session-{short}.zip");
+    let suggested = format!("supercharge-app-session-{short}.zip");
     // Save dialog can wait on the user, but runs on a blocking pool thread so
     // other Tauri commands (including force-quit) keep working.
     save_and_reveal_file(
@@ -868,7 +900,7 @@ pub async fn export_session_bundle(
     .await
 }
 
-/// Export the Grok Build CLI session trace (`grok trace <agent_id>`).
+/// Export the Supercharge CLI session trace (`supercharge trace <agent_id>`).
 ///
 /// - `local_only` (default **true** for safety): when true, pass `--local` so the
 ///   CLI only writes a local archive. When false, omit `--local` so the CLI may
@@ -876,7 +908,7 @@ pub async fn export_session_bundle(
 /// - Resolves `agent_session_id` from live/parked runtime or session meta.
 /// - Opens a save dialog for the `.tar.gz` and reveals the file.
 /// - Returns `{ ok, path, sizeBytes?, uploaded?, localOnly }` — never secrets/URLs.
-/// Export a CLI-linked session transcript via `grok export <agentSessionId> [OUTPUT]`.
+/// Export a CLI-linked session transcript via `supercharge export <agentSessionId> [OUTPUT]`.
 ///
 /// Resolves `agent_session_id` from live/parked runtime or session meta.
 /// Returns markdown text for the frontend to download (blob). Callers should
@@ -937,34 +969,28 @@ fn session_cli_export_blocking(
     let settings = store::load_settings();
     let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
     let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return Err("Grok Build CLI not found".into());
+        return Err("Supercharge CLI not found".into());
     };
-    let grok_home = crate::paths::resolve_agent_grok_home(&settings.session_data_mode);
+    let supercharge_home =
+        crate::paths::resolve_agent_supercharge_home(&settings.session_data_mode);
 
     let short: String = agent_sid.chars().take(8).collect();
     let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-    let tmp = std::env::temp_dir().join(format!("grok-export-{short}-{stamp}.md"));
+    let tmp = std::env::temp_dir().join(format!("supercharge-export-{short}-{stamp}.md"));
     let tmp_s = tmp.to_string_lossy().to_string();
 
-    // `grok export <SESSION_ID> [OUTPUT]` — positional output path (not -o).
-    let args = vec![
-        "export".to_string(),
-        agent_sid.clone(),
-        tmp_s.clone(),
-    ];
+    // `supercharge export <SESSION_ID> [OUTPUT]` — positional output path (not -o).
+    let args = vec!["export".to_string(), agent_sid.clone(), tmp_s.clone()];
 
     let mut cmd = std::process::Command::new(&cli_path);
     cmd.args(&args);
-    cmd.env("GROK_HOME", &grok_home);
-    crate::process_util::apply_no_window_std(&mut cmd);
-    if let Some(path_env) = crate::process_util::enriched_path_env() {
-        cmd.env("PATH", path_env);
-    }
+    cmd.env("SUPERCHARGE_HOME", &supercharge_home);
+    crate::process_util::apply_cli_env_std(&mut cmd);
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
     let mut child = cmd.spawn().map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
-        store::redact_text(&format!("Failed to run grok export: {e}"))
+        store::redact_text(&format!("Failed to run supercharge export: {e}"))
     })?;
     let started = std::time::Instant::now();
     let timeout = std::time::Duration::from_secs(CLI_EXPORT_TIMEOUT_SECS);
@@ -977,7 +1003,7 @@ fn session_cli_export_blocking(
                     let _ = child.wait();
                     let _ = std::fs::remove_file(&tmp);
                     return Err(format!(
-                        "grok export timed out after {CLI_EXPORT_TIMEOUT_SECS}s"
+                        "supercharge export timed out after {CLI_EXPORT_TIMEOUT_SECS}s"
                     ));
                 }
                 std::thread::sleep(std::time::Duration::from_millis(40));
@@ -986,7 +1012,7 @@ fn session_cli_export_blocking(
                 let _ = child.kill();
                 let _ = std::fs::remove_file(&tmp);
                 return Err(store::redact_text(&format!(
-                    "Failed to run grok export: {e}"
+                    "Failed to run supercharge export: {e}"
                 )));
             }
         }
@@ -1011,31 +1037,27 @@ fn session_cli_export_blocking(
         } else if !stdout.is_empty() {
             stdout
         } else {
-            "grok export failed".into()
+            "supercharge export failed".into()
         };
-        return Err(store::redact_text(&msg)
-            .trim()
-            .chars()
-            .take(1200)
-            .collect());
+        return Err(store::redact_text(&msg).trim().chars().take(1200).collect());
     }
 
     // Prefer the file we asked for; fall back to stdout (CLI may print MD when path fails).
     let markdown = if tmp.is_file() {
         let body = std::fs::read_to_string(&tmp).map_err(|e| {
             let _ = std::fs::remove_file(&tmp);
-            store::redact_text(&format!("Failed to read grok export output: {e}"))
+            store::redact_text(&format!("Failed to read supercharge export output: {e}"))
         })?;
         let _ = std::fs::remove_file(&tmp);
         body
     } else if !stdout.is_empty() {
         stdout
     } else {
-        return Err("grok export succeeded but produced no markdown".into());
+        return Err("supercharge export succeeded but produced no markdown".into());
     };
 
     if markdown.trim().is_empty() {
-        return Err("grok export produced empty markdown".into());
+        return Err("supercharge export produced empty markdown".into());
     }
 
     Ok(serde_json::json!({
@@ -1046,7 +1068,7 @@ fn session_cli_export_blocking(
     }))
 }
 
-/// Export the Grok Build CLI session trace (`grok trace <agent_id> --local`).
+/// Export the Supercharge CLI session trace (`supercharge trace <agent_id> --local`).
 /// Resolves `agent_session_id` from live/parked runtime or session meta.
 /// Opens a save dialog for the `.tar.gz` and reveals the file.
 #[tauri::command]
@@ -1144,16 +1166,17 @@ fn session_trace_export_blocking(
     let settings = store::load_settings();
     let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
     let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return Err("Grok Build CLI not found".into());
+        return Err("Supercharge CLI not found".into());
     };
-    let grok_home = crate::paths::resolve_agent_grok_home(&settings.session_data_mode);
+    let supercharge_home =
+        crate::paths::resolve_agent_supercharge_home(&settings.session_data_mode);
 
     let short: String = agent_sid.chars().take(8).collect();
     let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-    let tmp = std::env::temp_dir().join(format!("grok-trace-{short}-{stamp}.tar.gz"));
+    let tmp = std::env::temp_dir().join(format!("supercharge-trace-{short}-{stamp}.tar.gz"));
     let tmp_s = tmp.to_string_lossy().to_string();
 
-    // `grok trace <id>` uploads unless `--local`. Default App path keeps `--local`.
+    // `supercharge trace <id>` uploads unless `--local`. Default App path keeps `--local`.
     let mut args = vec!["trace".to_string(), agent_sid.clone()];
     if local_only {
         args.push("--local".to_string());
@@ -1166,7 +1189,7 @@ fn session_trace_export_blocking(
     std::thread::spawn(move || {
         let mut cmd = std::process::Command::new(&cli_path);
         cmd.args(&args);
-        cmd.env("GROK_HOME", &grok_home);
+        cmd.env("SUPERCHARGE_HOME", &supercharge_home);
         crate::process_util::apply_no_window_std(&mut cmd);
         if let Some(path_env) = crate::process_util::enriched_path_env() {
             cmd.env("PATH", path_env);
@@ -1182,10 +1205,12 @@ fn session_trace_export_blocking(
     let output = match rx.recv_timeout(std::time::Duration::from_secs(timeout_secs)) {
         Ok(Ok(o)) => o,
         Ok(Err(e)) => {
-            return Err(store::redact_text(&format!("Failed to run grok trace: {e}")));
+            return Err(store::redact_text(&format!(
+                "Failed to run supercharge trace: {e}"
+            )));
         }
         Err(_) => {
-            return Err(format!("grok trace timed out after {timeout_secs}s"));
+            return Err(format!("supercharge trace timed out after {timeout_secs}s"));
         }
     };
 
@@ -1198,13 +1223,9 @@ fn session_trace_export_blocking(
         } else if !stdout.is_empty() {
             stdout
         } else {
-            "grok trace failed".into()
+            "Supercharge trace failed".into()
         };
-        return Err(store::redact_text(&msg)
-            .trim()
-            .chars()
-            .take(1200)
-            .collect());
+        return Err(store::redact_text(&msg).trim().chars().take(1200).collect());
     }
 
     let cli_json = serde_json::from_str::<serde_json::Value>(&stdout).ok();
@@ -1229,14 +1250,14 @@ fn session_trace_export_blocking(
                     "archive file not created".into()
                 };
                 return Err(format!(
-                    "grok trace succeeded but archive missing: {}",
+                    "Supercharge trace succeeded but archive missing: {}",
                     detail.trim().chars().take(400).collect::<String>()
                 ));
             }
         }
     };
 
-    let suggested = format!("grok-trace-{short}.tar.gz");
+    let suggested = format!("supercharge-trace-{short}.tar.gz");
     // Already on a blocking thread (session_trace_export spawns us).
     let mut result = save_and_reveal_file_blocking(
         archive,
@@ -1254,4 +1275,3 @@ fn session_trace_export_blocking(
     }
     Ok(result)
 }
-

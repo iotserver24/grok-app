@@ -153,7 +153,7 @@ export const frTasks = {
   "batchAgents.mode.sessions": "Ouvrir des sessions",
   "batchAgents.mode.headless": "Résumé headless",
   "batchAgents.mode.sessionsHint": "Crée une conversation App par projet, connecte l’agent et envoie l’invite (mise en file dans la concurrence multi-sessions). Échec souple des chemins non approuvés / manquants.",
-  "batchAgents.mode.headlessHint": "Lance un `grok -p` one-shot par projet avec un délai souple. Les résultats apparaissent comme tableau récapitulatif — pas de sessions App. Échec souple si CLI manquante / délai / sortie vide.",
+  "batchAgents.mode.headlessHint": "Lance un `supercharge -p` one-shot par projet avec un délai souple. Les résultats apparaissent comme tableau récapitulatif — pas de sessions App. Échec souple si CLI manquante / délai / sortie vide.",
   "batchAgents.promptLabel": "Invite partagée",
   "batchAgents.promptPlaceholder": "ex. Relire les TODO ouverts et résumer les risques de ce dépôt…",
   "batchAgents.searchPlaceholder": "Filtrer les projets…",

@@ -5,7 +5,7 @@
  */
 
 export const SIDEBAR_SHOW_RELATIVE_TIME_STORAGE_KEY =
-  "grok.sidebarShowRelativeTime";
+  "supercharge.sidebarShowRelativeTime";
 
 /** Fired on `window` after a successful save (detail = boolean show). */
 export const SIDEBAR_SHOW_RELATIVE_TIME_CHANGE_EVENT =

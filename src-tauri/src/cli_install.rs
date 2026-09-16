@@ -1,22 +1,20 @@
-//! Install / update Grok Build CLI with multi-mirror download fallback.
+//! Install or update the Supercharge CLI from the public release repository.
 //!
-//! Mirrors (preference order — GCS first: more reliable in CN / restricted networks):
-//! 1. Direct GCS `https://storage.googleapis.com/grok-build-public-artifacts/cli`
-//! 2. Cloudflare-fronted `https://x.ai/cli`
+//! Release contract (kept in sync with `scripts/install.sh` / `install.ps1`):
+//! - repository: `iotserver24/supercharge-releases`
+//! - latest version: GitHub Releases API, then `releases/latest/download/version`
+//! - asset: `supercharge-{os}-{arch}[.exe]`
+//! - retained download: `~/.supercharge/downloads/supercharge-{version}-{os}-{arch}[.exe]`
+//! - installed commands: `~/.local/bin/supercharge` and `~/.local/bin/sc`
 //!
 //! Trust chain:
-//! - HTTPS only, URL must be under a known mirror base
-//! - Streaming SHA-256 of the downloaded bytes
-//! - Published checksum sidecar (`.sha256` / `SHA256SUMS` / `checksums.txt`);
-//!   **mismatch always aborts**. Official x.ai / GCS mirrors currently omit
-//!   sidecars (same as `install.sh` / `install.ps1`), so **missing sidecar
-//!   is allowed by default** and recorded as `checksum_verified: false`.
-//!   Strict fail-closed: `GROK_CLI_REQUIRE_CHECKSUM=1` (override with settings
-//!   allow-unverified or `GROK_CLI_ALLOW_UNVERIFIED=1`).
-//! - Architecture match via platform triple; size / `--version` gates after install
-//!
-//! Each mirror is retried a few times before falling through. Progress is emitted
-//! on `setup://cli-install-progress` for the setup wizard UI.
+//! - HTTPS only, restricted to the public repository endpoints and GitHub's release CDNs
+//! - streaming SHA-256 of the downloaded bytes
+//! - published checksum (`SHA256SUMS` or an asset sidecar) is verified when available;
+//!   a mismatch always aborts
+//! - strict missing-checksum mode: `SUPERCHARGE_CLI_REQUIRE_CHECKSUM=1`, overridable
+//!   by Settings or `SUPERCHARGE_CLI_ALLOW_UNVERIFIED=1`
+//! - size and `--version` gates before installation
 
 use std::fs;
 use std::io::Write;
@@ -32,15 +30,18 @@ use tracing::{info, warn};
 use crate::cli_probe;
 use crate::process_util::{self, user_home};
 
-/// Official artifact bases (order = preference).
-/// GCS first: x.ai often fails or stalls in CN; fallback to Cloudflare-fronted x.ai.
-const MIRROR_BASES: &[&str] = &[
-    "https://storage.googleapis.com/grok-build-public-artifacts/cli",
-    "https://x.ai/cli",
-];
-
-const CHANNEL: &str = "stable";
-const MIRROR_ATTEMPTS: u32 = 2;
+const RELEASE_REPO: &str = "iotserver24/supercharge-releases";
+const RELEASE_API_URL: &str =
+    "https://api.github.com/repos/iotserver24/supercharge-releases/releases/latest";
+const RELEASE_LATEST_BASE: &str =
+    "https://github.com/iotserver24/supercharge-releases/releases/latest/download";
+const RELEASE_DOWNLOAD_BASE: &str =
+    "https://github.com/iotserver24/supercharge-releases/releases/download";
+const RELEASE_REPO_URL: &str = "https://github.com/iotserver24/supercharge-releases";
+const INSTALL_SCRIPT_BASE: &str =
+    "https://raw.githubusercontent.com/iotserver24/supercharge-releases/main/scripts";
+const RESOLVE_ATTEMPTS: u32 = 2;
+const DOWNLOAD_ATTEMPTS: u32 = 2;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(600);
 
@@ -77,27 +78,47 @@ pub struct CliInstallResult {
     pub checksum_verified: Option<bool>,
 }
 
-/// True only for HTTPS URLs under a known official mirror base.
+fn parsed_allowed_url(url: &str) -> Option<reqwest::Url> {
+    let parsed = reqwest::Url::parse(url.trim()).ok()?;
+    if parsed.scheme() != "https"
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.port_or_known_default() != Some(443)
+        || url.contains("..")
+    {
+        return None;
+    }
+    Some(parsed)
+}
+
+/// True only for HTTPS URLs used by the public Supercharge release contract.
 pub fn is_allowed_download_url(url: &str) -> bool {
-    let url = url.trim();
-    if !url.starts_with("https://") {
+    let Some(parsed) = parsed_allowed_url(url) else {
         return false;
-    }
-    // Reject credentials / userinfo and odd schemes already covered by https://.
-    if url.contains('@') {
-        return false;
-    }
-    for base in MIRROR_BASES {
-        let base = base.trim_end_matches('/');
-        if url == base || url.starts_with(&format!("{base}/")) {
-            // No path traversal via `..` segments.
-            if url.contains("..") {
-                return false;
-            }
-            return true;
+    };
+    let host = parsed.host_str().unwrap_or_default().to_ascii_lowercase();
+    let path = parsed.path();
+
+    match host.as_str() {
+        "api.github.com" => path == "/repos/iotserver24/supercharge-releases/releases/latest",
+        "github.com" => {
+            path == "/iotserver24/supercharge-releases/releases/latest/download/version"
+                || path.starts_with("/iotserver24/supercharge-releases/releases/download/v")
         }
+        // GitHub release downloads redirect to signed, opaque paths on these hosts.
+        "release-assets.githubusercontent.com" | "objects.githubusercontent.com" => true,
+        _ => false,
     }
-    false
+}
+
+fn redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() < 8 && is_allowed_download_url(attempt.url().as_str()) {
+            attempt.follow()
+        } else {
+            attempt.stop()
+        }
+    })
 }
 
 fn sha256_file(path: &Path) -> Result<String, String> {
@@ -123,62 +144,51 @@ pub fn parse_checksum_for_file(body: &str, filename: &str) -> Option<String> {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        // "hex  filename" or "hex *filename"
         let mut parts = line.split_whitespace();
         let hex_part = parts.next()?;
         if hex_part.len() != 64 || !hex_part.chars().all(|c| c.is_ascii_hexdigit()) {
-            // bare hex for a single-file sidecar
             continue;
         }
         if let Some(name) = parts.next() {
             let name = name.trim_start_matches('*');
-            if name == want
-                || name.ends_with(want)
-                || Path::new(name).file_name().and_then(|s| s.to_str()) == Some(want)
-            {
+            if name == want || Path::new(name).file_name().and_then(|s| s.to_str()) == Some(want) {
                 return Some(hex_part.to_ascii_lowercase());
             }
         } else {
-            // single-line bare hex
             return Some(hex_part.to_ascii_lowercase());
         }
     }
-    // whole-file bare hex (single line)
-    let t = body.trim();
-    if t.len() == 64 && t.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Some(t.to_ascii_lowercase());
+    let text = body.trim();
+    if text.len() == 64 && text.chars().all(|c| c.is_ascii_hexdigit()) {
+        Some(text.to_ascii_lowercase())
+    } else {
+        None
     }
-    None
 }
 
 async fn fetch_published_checksum(
     client: &reqwest::Client,
-    mirror: &str,
     version: &str,
-    platform: &str,
     artifact_name: &str,
 ) -> Option<String> {
-    let base = mirror.trim_end_matches('/');
-    // Common sidecar layouts; none are published today, but we fail closed on mismatch
-    // if any of them appears later.
+    let base = release_base(version);
     let candidates = [
+        format!("{base}/SHA256SUMS"),
         format!("{base}/{artifact_name}.sha256"),
         format!("{base}/{artifact_name}.sha256sum"),
-        format!("{base}/SHA256SUMS"),
-        format!("{base}/checksums.txt"),
-        format!("{base}/grok-{version}-{platform}.sha256"),
-        format!("{base}/{version}/SHA256SUMS"),
     ];
     for url in candidates {
         if !is_allowed_download_url(&url) {
             continue;
         }
         match client.get(&url).send().await {
-            Ok(resp) if resp.status().is_success() => {
+            Ok(resp)
+                if resp.status().is_success() && is_allowed_download_url(resp.url().as_str()) =>
+            {
                 if let Ok(text) = resp.text().await {
-                    if let Some(h) = parse_checksum_for_file(&text, artifact_name) {
+                    if let Some(hash) = parse_checksum_for_file(&text, artifact_name) {
                         info!("cli_install: checksum for {artifact_name} from {url}");
-                        return Some(h);
+                        return Some(hash);
                     }
                 }
             }
@@ -188,15 +198,15 @@ async fn fetch_published_checksum(
     None
 }
 
-fn emit(app: &AppHandle, p: CliInstallProgress) {
-    let _ = app.emit("setup://cli-install-progress", &p);
+fn emit(app: &AppHandle, progress: CliInstallProgress) {
+    let _ = app.emit("setup://cli-install-progress", &progress);
 }
 
 fn progress(
     phase: &str,
     message: impl Into<String>,
     percent: Option<f64>,
-    mirror: Option<String>,
+    source: Option<String>,
     version: Option<String>,
 ) -> CliInstallProgress {
     CliInstallProgress {
@@ -205,7 +215,7 @@ fn progress(
         percent,
         bytes_downloaded: None,
         total_bytes: None,
-        mirror,
+        mirror: source,
         version,
         sha256: None,
     }
@@ -219,68 +229,112 @@ fn platform_triple() -> Result<(&'static str, &'static str), String> {
     } else if cfg!(target_os = "linux") {
         "linux"
     } else {
-        return Err("Unsupported OS for Grok Build auto-install".into());
+        return Err("Unsupported OS for Supercharge auto-install".into());
     };
     let arch = if cfg!(target_arch = "aarch64") {
         "aarch64"
     } else if cfg!(target_arch = "x86_64") {
         "x86_64"
     } else {
-        return Err("Unsupported CPU architecture for Grok Build auto-install".into());
+        return Err("Unsupported CPU architecture for Supercharge auto-install".into());
     };
     Ok((os, arch))
+}
+
+fn artifact_name_for(os: &str, arch: &str) -> String {
+    format!(
+        "supercharge-{os}-{arch}{}",
+        if os == "windows" { ".exe" } else { "" }
+    )
 }
 
 fn http_client() -> Result<reqwest::Client, String> {
     crate::proxy::apply_to_reqwest(reqwest::Client::builder())
         .connect_timeout(CONNECT_TIMEOUT)
         .timeout(REQUEST_TIMEOUT)
-        .user_agent(format!("GrokApp/{}", env!("CARGO_PKG_VERSION")))
-        .redirect(reqwest::redirect::Policy::limited(8))
+        .user_agent(format!(
+            "Supercharge/{} (desktop; cli-installer; +{RELEASE_REPO_URL})",
+            env!("CARGO_PKG_VERSION")
+        ))
+        .redirect(redirect_policy())
         .build()
         .map_err(|e| e.to_string())
 }
 
-fn mirror_host(base: &str) -> String {
-    base.trim_start_matches("https://")
-        .trim_start_matches("http://")
-        .split('/')
-        .next()
-        .unwrap_or(base)
-        .to_string()
+fn source_host(url: &str) -> String {
+    reqwest::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
+        .unwrap_or_else(|| url.to_string())
 }
 
-async fn fetch_version_text(client: &reqwest::Client, base: &str) -> Result<String, String> {
-    let url = format!("{}/{CHANNEL}", base.trim_end_matches('/'));
-    if !is_allowed_download_url(&url) {
-        return Err(format!("version URL not on allowlist: {url}"));
+fn normalize_version(raw: &str) -> Option<String> {
+    let version = raw.trim().trim_start_matches(['v', 'V']);
+    if version.is_empty() || version.contains("..") {
+        return None;
     }
-    let resp = client
-        .get(&url)
+
+    // Match the public shell installer's contract:
+    // X.Y.Z with an optional `-suffix` or `.suffix` made from ASCII version chars.
+    let mut parts = version.splitn(3, '.');
+    let major = parts.next()?;
+    let minor = parts.next()?;
+    let patch_and_suffix = parts.next()?;
+    if major.is_empty()
+        || minor.is_empty()
+        || !major.bytes().all(|b| b.is_ascii_digit())
+        || !minor.bytes().all(|b| b.is_ascii_digit())
+    {
+        return None;
+    }
+    let suffix_start = patch_and_suffix
+        .find(['.', '-'])
+        .unwrap_or(patch_and_suffix.len());
+    let (patch, suffix) = patch_and_suffix.split_at(suffix_start);
+    if patch.is_empty() || !patch.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    if !suffix.is_empty()
+        && (suffix.len() == 1
+            || !suffix[1..]
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-')))
+    {
+        return None;
+    }
+    Some(version.to_string())
+}
+
+fn parse_latest_release_version(body: &str) -> Result<String, String> {
+    let value: serde_json::Value =
+        serde_json::from_str(body).map_err(|e| format!("invalid GitHub release response: {e}"))?;
+    let tag = value
+        .get("tag_name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "GitHub latest release response is missing tag_name".to_string())?;
+    normalize_version(tag).ok_or_else(|| format!("invalid Supercharge release tag: {tag:?}"))
+}
+
+async fn fetch_text(client: &reqwest::Client, url: &str, label: &str) -> Result<String, String> {
+    if !is_allowed_download_url(url) {
+        return Err(format!("{label} URL not on allowlist: {url}"));
+    }
+    let response = client
+        .get(url)
+        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
         .send()
         .await
-        .map_err(|e| format!("version probe {url}: {e}"))?;
-    if !resp.status().is_success() {
-        return Err(format!("version probe {url}: HTTP {}", resp.status()));
+        .map_err(|e| format!("{label} {url}: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("{label} {url}: HTTP {}", response.status()));
     }
-    let text = resp.text().await.map_err(|e| e.to_string())?;
-    let version = text
-        .lines()
-        .next()
-        .unwrap_or("")
-        .trim()
-        .trim_matches(|c: char| c.is_whitespace() || c == '\r')
-        .to_string();
-    if version.is_empty()
-        || !version
-            .chars()
-            .next()
-            .map(|c| c.is_ascii_digit())
-            .unwrap_or(false)
-    {
-        return Err(format!("invalid version pointer from {url}: {text:?}"));
+    if !is_allowed_download_url(response.url().as_str()) {
+        return Err(format!(
+            "{label} redirected off allowlist: {}",
+            response.url()
+        ));
     }
-    Ok(version)
+    response.text().await.map_err(|e| format!("{label}: {e}"))
 }
 
 async fn resolve_version(
@@ -291,38 +345,52 @@ async fn resolve_version(
         app,
         progress(
             "resolving",
-            "Resolving latest Grok Build version…",
+            "Resolving latest Supercharge release…",
             Some(0.0),
             None,
             None,
         ),
     );
 
+    let sources = [
+        (RELEASE_API_URL, "GitHub latest release API"),
+        (
+            "https://github.com/iotserver24/supercharge-releases/releases/latest/download/version",
+            "GitHub release version asset",
+        ),
+    ];
     let mut errors = Vec::new();
-    for base in MIRROR_BASES {
-        for attempt in 1..=MIRROR_ATTEMPTS {
+    for (url, label) in sources {
+        for attempt in 1..=RESOLVE_ATTEMPTS {
             emit(
                 app,
                 progress(
                     "resolving",
-                    format!(
-                        "Trying {} (attempt {attempt}/{MIRROR_ATTEMPTS})…",
-                        mirror_host(base)
-                    ),
+                    format!("Trying {label} (attempt {attempt}/{RESOLVE_ATTEMPTS})…"),
                     Some(2.0),
-                    Some((*base).into()),
+                    Some(url.into()),
                     None,
                 ),
             );
-            match fetch_version_text(client, base).await {
-                Ok(v) => {
-                    info!("cli_install: version {v} via {base}");
-                    return Ok((v, (*base).to_string()));
+            let result = fetch_text(client, url, "version lookup")
+                .await
+                .and_then(|body| {
+                    if url == RELEASE_API_URL {
+                        parse_latest_release_version(&body)
+                    } else {
+                        normalize_version(&body)
+                            .ok_or_else(|| format!("invalid version pointer from {url}: {body:?}"))
+                    }
+                });
+            match result {
+                Ok(version) => {
+                    info!("cli_install: resolved Supercharge {version} via {url}");
+                    return Ok((version, url.to_string()));
                 }
-                Err(e) => {
-                    warn!("cli_install version fail base={base} attempt={attempt}: {e}");
-                    errors.push(e);
-                    if attempt < MIRROR_ATTEMPTS {
+                Err(error) => {
+                    warn!("cli_install version fail source={url} attempt={attempt}: {error}");
+                    errors.push(error);
+                    if attempt < RESOLVE_ATTEMPTS {
                         tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
                     }
                 }
@@ -330,9 +398,13 @@ async fn resolve_version(
         }
     }
     Err(format!(
-        "Could not resolve Grok Build version from any mirror. {}",
+        "Failed to resolve latest Supercharge version from {RELEASE_REPO}. {}",
         errors.last().cloned().unwrap_or_default()
     ))
+}
+
+fn release_base(version: &str) -> String {
+    format!("{RELEASE_DOWNLOAD_BASE}/v{version}")
 }
 
 async fn download_to_file(
@@ -341,29 +413,26 @@ async fn download_to_file(
     url: &str,
     dest: &Path,
     version: &str,
-    mirror: &str,
 ) -> Result<(), String> {
-    // Fail-closed: never fetch from outside the official mirror list.
     if !is_allowed_download_url(url) {
         return Err(format!("download URL not on allowlist: {url}"));
     }
-    let resp = client
+    let response = client
         .get(url)
         .send()
         .await
         .map_err(|e| format!("download {url}: {e}"))?;
-    if !resp.status().is_success() {
-        return Err(format!("download {url}: HTTP {}", resp.status()));
+    if !response.status().is_success() {
+        return Err(format!("download {url}: HTTP {}", response.status()));
     }
-    // After redirects, re-check final URL when available.
-    let final_url = resp.url().to_string();
+    let final_url = response.url().to_string();
     if !is_allowed_download_url(&final_url) {
         return Err(format!("download redirected off allowlist: {final_url}"));
     }
-    let total = resp.content_length();
-    let mut stream = resp.bytes_stream();
+    let total = response.content_length();
+    let mut stream = response.bytes_stream();
     let mut file = fs::File::create(dest).map_err(|e| format!("create {}: {e}", dest.display()))?;
-    let mut downloaded: u64 = 0;
+    let mut downloaded = 0u64;
     let mut last_emit = 0u64;
     let mut hasher = Sha256::new();
 
@@ -371,11 +440,11 @@ async fn download_to_file(
         app,
         CliInstallProgress {
             phase: "downloading".into(),
-            message: format!("Downloading from {}…", mirror_host(mirror)),
+            message: format!("Downloading from {}…", source_host(&final_url)),
             percent: Some(5.0),
             bytes_downloaded: Some(0),
             total_bytes: total,
-            mirror: Some(mirror.into()),
+            mirror: Some(url.into()),
             version: Some(version.into()),
             sha256: None,
         },
@@ -387,11 +456,10 @@ async fn download_to_file(
         file.write_all(&chunk)
             .map_err(|e| format!("write download: {e}"))?;
         downloaded += chunk.len() as u64;
-        // Throttle UI events (~every 256 KiB or completion).
         if downloaded.saturating_sub(last_emit) >= 256 * 1024 || total == Some(downloaded) {
             last_emit = downloaded;
             let percent = match total {
-                Some(t) if t > 0 => 5.0 + (downloaded as f64 / t as f64) * 85.0,
+                Some(total) if total > 0 => 5.0 + (downloaded as f64 / total as f64) * 85.0,
                 _ => 5.0 + (downloaded as f64 / (120.0 * 1024.0 * 1024.0)).min(1.0) * 85.0,
             };
             emit(
@@ -402,7 +470,7 @@ async fn download_to_file(
                     percent: Some(percent.min(90.0)),
                     bytes_downloaded: Some(downloaded),
                     total_bytes: total,
-                    mirror: Some(mirror.into()),
+                    mirror: Some(url.into()),
                     version: Some(version.into()),
                     sha256: None,
                 },
@@ -412,318 +480,269 @@ async fn download_to_file(
     file.sync_all().map_err(|e| e.to_string())?;
     if downloaded == 0 {
         let _ = fs::remove_file(dest);
-        return Err("download produced empty file".into());
+        return Err("Supercharge download produced an empty file".into());
     }
-    if let Some(t) = total {
-        if downloaded != t {
+    if let Some(total) = total {
+        if downloaded != total {
             let _ = fs::remove_file(dest);
             return Err(format!(
-                "download size mismatch: got {downloaded}, expected {t}"
+                "Supercharge download size mismatch: got {downloaded}, expected {total}"
             ));
         }
     }
-    let digest = hex::encode(hasher.finalize());
-    // Persist digest next to the part file for the install step.
-    let side = dest.with_extension("sha256");
-    let _ = fs::write(&side, &digest);
+    let _ = fs::write(
+        dest.with_extension("sha256"),
+        hex::encode(hasher.finalize()),
+    );
     Ok(())
 }
 
 fn format_bytes_pair(done: u64, total: Option<u64>) -> String {
     match total {
-        Some(t) => format!("{} / {}", format_bytes(done), format_bytes(t)),
+        Some(total) => format!("{} / {}", format_bytes(done), format_bytes(total)),
         None => format_bytes(done),
     }
 }
 
-fn format_bytes(n: u64) -> String {
+fn format_bytes(bytes: u64) -> String {
     const KB: f64 = 1024.0;
     const MB: f64 = KB * 1024.0;
-    let f = n as f64;
-    if f >= MB {
-        format!("{:.1} MB", f / MB)
-    } else if f >= KB {
-        format!("{:.0} KB", f / KB)
+    let value = bytes as f64;
+    if value >= MB {
+        format!("{:.1} MB", value / MB)
+    } else if value >= KB {
+        format!("{:.0} KB", value / KB)
     } else {
-        format!("{n} B")
+        format!("{bytes} B")
     }
 }
 
 fn verify_binary(path: &Path) -> Result<String, String> {
-    // Fresh downloads are not yet "looks_runnable":
-    // - Windows temp names used to end in `.part` (rejected by extension check)
-    // - Unix files from File::create have no +x until we chmod
-    // Real gate is a successful `--version` after we fix permissions / naming.
     if !path.is_file() {
-        return Err(format!("not a file: {}", path.display()));
-    }
-    let meta = fs::metadata(path).map_err(|e| format!("stat {}: {e}", path.display()))?;
-    if meta.len() < 1024 {
         return Err(format!(
-            "downloaded file too small ({} bytes): {}",
-            meta.len(),
+            "downloaded Supercharge binary is not a file: {}",
+            path.display()
+        ));
+    }
+    let metadata = fs::metadata(path).map_err(|e| format!("stat {}: {e}", path.display()))?;
+    if metadata.len() < 1024 {
+        return Err(format!(
+            "downloaded Supercharge binary is too small ({} bytes): {}",
+            metadata.len(),
             path.display()
         ));
     }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mut perms = meta.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(path, perms).map_err(|e| e.to_string())?;
+        let mut permissions = metadata.permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).map_err(|e| e.to_string())?;
     }
-    let mut cmd = std::process::Command::new(path);
-    cmd.arg("--version");
-    process_util::apply_no_window_std(&mut cmd);
-    let out = cmd
+    let mut command = std::process::Command::new(path);
+    command.arg("--version");
+    process_util::apply_no_window_std(&mut command);
+    let output = command
         .output()
-        .map_err(|e| format!("failed to run downloaded binary: {e}"))?;
-    if !out.status.success() {
+        .map_err(|e| format!("failed to run downloaded Supercharge binary: {e}"))?;
+    if !output.status.success() {
         return Err(format!(
-            "downloaded binary --version failed: {}",
-            String::from_utf8_lossy(&out.stderr)
+            "downloaded Supercharge binary --version failed: {}",
+            String::from_utf8_lossy(&output.stderr)
         ));
     }
-    let line = String::from_utf8_lossy(&out.stdout)
+    let line = String::from_utf8_lossy(&output.stdout)
         .lines()
         .next()
         .unwrap_or("")
         .trim()
         .to_string();
     if line.is_empty() {
-        Err("downloaded binary returned empty --version".into())
+        Err("downloaded Supercharge binary returned an empty --version".into())
     } else {
         Ok(line)
     }
 }
 
-fn link_install(download_path: &Path, version: &str) -> Result<PathBuf, String> {
+fn replace_with_copy(source: &Path, target: &Path) -> Result<(), String> {
+    // Never follow an existing symlink and overwrite a target outside ~/.local/bin.
+    if target
+        .symlink_metadata()
+        .map(|metadata| metadata.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        fs::remove_file(target).map_err(|error| format!("remove {}: {error}", target.display()))?;
+    }
+    let old = PathBuf::from(format!("{}.old", target.display()));
+    let _ = fs::remove_file(&old);
+    if fs::copy(source, target).is_err() {
+        let _ = fs::rename(target, &old);
+        if let Err(error) = fs::copy(source, target) {
+            let _ = fs::rename(&old, target);
+            return Err(format!("install {}: {error}", target.display()));
+        }
+    }
+    let _ = fs::remove_file(old);
+    Ok(())
+}
+
+fn install_binary(download_path: &Path, version: &str) -> Result<PathBuf, String> {
     let home = user_home();
-    let download_dir = home.join(".grok").join("downloads");
-    let bin_dir = home.join(".grok").join("bin");
+    let download_dir = home.join(".supercharge").join("downloads");
+    let bin_dir = home.join(".local").join("bin");
     fs::create_dir_all(&download_dir).map_err(|e| e.to_string())?;
     fs::create_dir_all(&bin_dir).map_err(|e| e.to_string())?;
 
     let (os, arch) = platform_triple()?;
-    let platform = format!("{os}-{arch}");
-
-    #[cfg(target_os = "windows")]
-    let final_name = format!("grok-{version}-{platform}.exe");
-    #[cfg(not(target_os = "windows"))]
-    let final_name = format!("grok-{version}-{platform}");
-
-    let final_download = download_dir.join(&final_name);
-    if final_download != *download_path {
+    let ext = if os == "windows" { ".exe" } else { "" };
+    let final_download = download_dir.join(format!("supercharge-{version}-{os}-{arch}{ext}"));
+    if final_download != download_path {
         let _ = fs::remove_file(&final_download);
         if fs::rename(download_path, &final_download).is_err() {
-            fs::copy(download_path, &final_download).map_err(|e| format!("place binary: {e}"))?;
+            fs::copy(download_path, &final_download)
+                .map_err(|e| format!("retain downloaded Supercharge binary: {e}"))?;
             let _ = fs::remove_file(download_path);
         }
     }
 
     #[cfg(target_os = "windows")]
     {
-        let grok_exe = bin_dir.join("grok.exe");
-        let agent_exe = bin_dir.join("agent.exe");
-        for target in [&grok_exe, &agent_exe] {
-            let old = PathBuf::from(format!("{}.old", target.display()));
-            let _ = fs::remove_file(&old);
-            if fs::copy(&final_download, target).is_err() {
-                // Locked by running process — rename aside then retry
-                let _ = fs::rename(target, &old);
-                if let Err(e2) = fs::copy(&final_download, target) {
-                    let _ = fs::rename(&old, target);
-                    return Err(format!("install {}: {e2}", target.display()));
-                }
-            }
-        }
-        Ok(grok_exe)
+        let supercharge = bin_dir.join("supercharge.exe");
+        let alias = bin_dir.join("sc.exe");
+        replace_with_copy(&final_download, &supercharge)?;
+        replace_with_copy(&final_download, &alias)?;
+        Ok(supercharge)
     }
 
     #[cfg(not(target_os = "windows"))]
     {
-        let link_target = if download_dir.parent() == bin_dir.parent() {
-            PathBuf::from(format!("../downloads/{}", final_name))
-        } else {
-            final_download.clone()
-        };
-        let grok_link = bin_dir.join("grok");
-        let agent_link = bin_dir.join("agent");
-        // Remove existing file/symlink then recreate
-        let _ = fs::remove_file(&grok_link);
-        let _ = fs::remove_file(&agent_link);
-        std::os::unix::fs::symlink(&link_target, &grok_link)
-            .map_err(|e| format!("symlink grok: {e}"))?;
-        std::os::unix::fs::symlink(&link_target, &agent_link)
-            .map_err(|e| format!("symlink agent: {e}"))?;
-        Ok(grok_link)
+        use std::os::unix::fs::{symlink, PermissionsExt};
+
+        let supercharge = bin_dir.join("supercharge");
+        replace_with_copy(&final_download, &supercharge)?;
+        let mut permissions = fs::metadata(&supercharge)
+            .map_err(|e| e.to_string())?
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&supercharge, permissions).map_err(|e| e.to_string())?;
+
+        let alias = bin_dir.join("sc");
+        let _ = fs::remove_file(&alias);
+        symlink("supercharge", &alias).map_err(|e| format!("symlink sc: {e}"))?;
+        Ok(supercharge)
     }
 }
 
-async fn try_download_all_mirrors(
+async fn download_release(
     app: &AppHandle,
     client: &reqwest::Client,
     version: &str,
-    preferred_mirror: &str,
-) -> Result<(PathBuf, String), String> {
+) -> Result<(PathBuf, String, String), String> {
     let (os, arch) = platform_triple()?;
-    let platform = format!("{os}-{arch}");
-    let mut bases: Vec<&str> = Vec::new();
-    // Preferred first, then others
-    bases.push(preferred_mirror);
-    for b in MIRROR_BASES {
-        if *b != preferred_mirror {
-            bases.push(*b);
-        }
+    let artifact_name = artifact_name_for(os, arch);
+    let url = format!("{}/{artifact_name}", release_base(version));
+    if !is_allowed_download_url(&url) {
+        return Err(format!("release asset URL not on allowlist: {url}"));
     }
 
-    let tmp_dir = user_home().join(".grok").join("downloads");
-    fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
-    // Windows: keep a trailing `.exe` so CreateProcess / probe can run the partial file
-    // after a successful download (extension must not be bare `.part`).
-    let tmp_path = tmp_dir.join(format!(
-        "grok-{}-{}-{}.part{}",
-        version,
-        platform,
-        std::process::id(),
-        if cfg!(target_os = "windows") {
-            ".exe"
-        } else {
-            ""
-        }
-    ));
+    let download_dir = user_home().join(".supercharge").join("downloads");
+    fs::create_dir_all(&download_dir).map_err(|e| e.to_string())?;
+    let temp_name = if cfg!(target_os = "windows") {
+        format!(
+            "supercharge-{version}-{os}-{arch}-{}.part.exe",
+            std::process::id()
+        )
+    } else {
+        format!(
+            "supercharge-{version}-{os}-{arch}-{}.part",
+            std::process::id()
+        )
+    };
+    let temp_path = download_dir.join(temp_name);
 
     let mut errors = Vec::new();
-    for base in bases {
-        let artifact = format!(
-            "{}/grok-{version}-{platform}{}",
-            base.trim_end_matches('/'),
-            if cfg!(target_os = "windows") {
-                ".exe"
-            } else {
-                ""
-            }
+    for attempt in 1..=DOWNLOAD_ATTEMPTS {
+        emit(
+            app,
+            progress(
+                "downloading",
+                format!("GitHub release · attempt {attempt}/{DOWNLOAD_ATTEMPTS}"),
+                Some(5.0),
+                Some(url.clone()),
+                Some(version.into()),
+            ),
         );
-        // Windows also tries extension-less fallback like install.sh
-        let candidates: Vec<String> = if cfg!(target_os = "windows") {
-            vec![
-                artifact.clone(),
-                format!("{}/grok-{version}-{platform}", base.trim_end_matches('/')),
-            ]
-        } else {
-            vec![artifact]
-        };
-
-        for attempt in 1..=MIRROR_ATTEMPTS {
-            for url in &candidates {
-                if !is_allowed_download_url(url) {
-                    errors.push(format!("skip non-allowlisted URL: {url}"));
-                    continue;
+        let _ = fs::remove_file(&temp_path);
+        match download_to_file(app, client, &url, &temp_path, version).await {
+            Ok(()) => return Ok((temp_path, url, artifact_name)),
+            Err(error) => {
+                warn!("cli_install download fail url={url}: {error}");
+                errors.push(error);
+                let _ = fs::remove_file(&temp_path);
+                if attempt < DOWNLOAD_ATTEMPTS {
+                    tokio::time::sleep(Duration::from_millis(500 * attempt as u64)).await;
                 }
-                emit(
-                    app,
-                    progress(
-                        "downloading",
-                        format!(
-                            "Mirror {} · attempt {attempt}/{MIRROR_ATTEMPTS}",
-                            mirror_host(base)
-                        ),
-                        Some(5.0),
-                        Some(base.into()),
-                        Some(version.into()),
-                    ),
-                );
-                let _ = fs::remove_file(&tmp_path);
-                match download_to_file(app, client, url, &tmp_path, version, base).await {
-                    Ok(()) => return Ok((tmp_path, base.to_string())),
-                    Err(e) => {
-                        warn!("cli_install download fail url={url}: {e}");
-                        errors.push(e);
-                        let _ = fs::remove_file(&tmp_path);
-                    }
-                }
-            }
-            if attempt < MIRROR_ATTEMPTS {
-                tokio::time::sleep(Duration::from_millis(500 * attempt as u64)).await;
             }
         }
     }
     Err(format!(
-        "All mirrors failed. Last error: {}",
+        "Supercharge release download failed. Last error: {}. This platform may not be published yet; check {RELEASE_REPO_URL}/releases/tag/v{version}",
         errors.last().cloned().unwrap_or_else(|| "unknown".into())
     ))
 }
 
-/// Whether a published checksum is **required** when the mirror has none.
+/// Whether a published checksum is required when a release has none.
 ///
-/// Default **false**: official x.ai / GCS CLI mirrors do not publish SHA-256
-/// sidecars today (and the official install scripts do not verify them).
-/// Requiring a missing sidecar made first-run install fail on every platform
-/// (#227). Mismatch always fails regardless of this flag.
-///
-/// Fail-closed on **missing** sidecar only when:
-/// - env `GROK_CLI_REQUIRE_CHECKSUM` is 1/true/yes/on, **and**
-/// - neither `allow_unverified` (Settings) nor `GROK_CLI_ALLOW_UNVERIFIED` is set
+/// A checksum mismatch always fails. A missing checksum fails only when
+/// `SUPERCHARGE_CLI_REQUIRE_CHECKSUM` is truthy and neither Settings nor
+/// `SUPERCHARGE_CLI_ALLOW_UNVERIFIED` allows the unverified install.
 pub fn require_published_checksum(allow_unverified: bool) -> bool {
-    if env_flag_truthy("GROK_CLI_ALLOW_UNVERIFIED") || allow_unverified {
+    if env_flag_truthy("SUPERCHARGE_CLI_ALLOW_UNVERIFIED") || allow_unverified {
         return false;
     }
-    env_flag_truthy("GROK_CLI_REQUIRE_CHECKSUM")
+    env_flag_truthy("SUPERCHARGE_CLI_REQUIRE_CHECKSUM")
 }
 
 fn env_flag_truthy(name: &str) -> bool {
     std::env::var(name)
-        .map(|v| {
-            let v = v.trim().to_ascii_lowercase();
-            matches!(v.as_str(), "1" | "true" | "yes" | "on")
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
         })
         .unwrap_or(false)
 }
 
-/// Download latest stable Grok Build and install into `~/.grok`.
-///
-/// `allow_unverified`: when true, continue if the mirror has no published
-/// checksum (still fail on mismatch). Default path should pass `false`.
+/// Download the latest public Supercharge release and install it into `~/.local/bin`.
 pub async fn install_cli_latest(
     app: AppHandle,
     allow_unverified: bool,
 ) -> Result<CliInstallResult, String> {
     let client = http_client()?;
-    let (version, preferred) = resolve_version(&app, &client).await?;
-
+    let (version, version_source) = resolve_version(&app, &client).await?;
     emit(
         &app,
         progress(
             "downloading",
-            format!("Found Grok Build v{version}"),
+            format!("Found Supercharge v{version}"),
             Some(4.0),
-            Some(preferred.clone()),
+            Some(version_source),
             Some(version.clone()),
         ),
     );
 
-    let (tmp_path, mirror_used) =
-        try_download_all_mirrors(&app, &client, &version, &preferred).await?;
-
-    let digest = sha256_file(&tmp_path).unwrap_or_else(|_| {
-        // Fallback: side file written during download
-        fs::read_to_string(tmp_path.with_extension("sha256"))
+    let (temp_path, asset_url, artifact_name) = download_release(&app, &client, &version).await?;
+    let digest = sha256_file(&temp_path).unwrap_or_else(|_| {
+        fs::read_to_string(temp_path.with_extension("sha256"))
             .unwrap_or_default()
             .trim()
             .to_string()
     });
     if digest.len() != 64 {
-        let _ = fs::remove_file(&tmp_path);
-        return Err("failed to compute SHA-256 of downloaded CLI binary".into());
+        let _ = fs::remove_file(&temp_path);
+        return Err("failed to compute SHA-256 of downloaded Supercharge binary".into());
     }
-
-    let (os, arch) = platform_triple()?;
-    let platform = format!("{os}-{arch}");
-    let artifact_name = if cfg!(target_os = "windows") {
-        format!("grok-{version}-{platform}.exe")
-    } else {
-        format!("grok-{version}-{platform}")
-    };
 
     emit(
         &app,
@@ -733,18 +752,17 @@ pub async fn install_cli_latest(
             percent: Some(91.0),
             bytes_downloaded: None,
             total_bytes: None,
-            mirror: Some(mirror_used.clone()),
+            mirror: Some(asset_url.clone()),
             version: Some(version.clone()),
             sha256: Some(digest.clone()),
         },
     );
 
-    let published =
-        fetch_published_checksum(&client, &mirror_used, &version, &platform, &artifact_name).await;
-    let checksum_verified = match published {
+    let checksum_verified = match fetch_published_checksum(&client, &version, &artifact_name).await
+    {
         Some(expected) => {
             if expected != digest {
-                let _ = fs::remove_file(&tmp_path);
+                let _ = fs::remove_file(&temp_path);
                 return Err(format!(
                     "SHA-256 mismatch for {artifact_name}: got {digest}, expected {expected}"
                 ));
@@ -753,19 +771,17 @@ pub async fn install_cli_latest(
             true
         }
         None => {
-            // Fail-closed: no published sidecar → refuse unless user opted in.
             if require_published_checksum(allow_unverified) {
-                let _ = fs::remove_file(&tmp_path);
+                let _ = fs::remove_file(&temp_path);
                 return Err(format!(
-                    "No published SHA-256 for {artifact_name}. Refusing install \
-                     (GROK_CLI_REQUIRE_CHECKSUM is set). Enable “Allow unverified CLI install” \
-                     in Settings → Runtime, set GROK_CLI_ALLOW_UNVERIFIED=1, or unset \
-                     GROK_CLI_REQUIRE_CHECKSUM. hash={digest}"
+                    "No published SHA-256 for {artifact_name}. Refusing install because \
+                     SUPERCHARGE_CLI_REQUIRE_CHECKSUM is set. Enable ‘Allow unverified CLI \
+                     install’ in Settings → Runtime, set SUPERCHARGE_CLI_ALLOW_UNVERIFIED=1, \
+                     or unset SUPERCHARGE_CLI_REQUIRE_CHECKSUM. hash={digest}"
                 ));
             }
             warn!(
-                "cli_install: no published checksum for {artifact_name}; \
-                 continuing with allowlist + binary probe (unverified, hash={digest})"
+                "cli_install: no published checksum for {artifact_name}; continuing with HTTPS allowlist + binary probe (hash={digest})"
             );
             false
         }
@@ -776,24 +792,24 @@ pub async fn install_cli_latest(
         CliInstallProgress {
             phase: "verifying".into(),
             message: if checksum_verified {
-                "Checksum OK — verifying binary…".into()
+                "Checksum OK — verifying Supercharge binary…".into()
             } else {
-                "Verifying binary…".into()
+                "Verifying Supercharge binary…".into()
             },
             percent: Some(92.0),
             bytes_downloaded: None,
             total_bytes: None,
-            mirror: Some(mirror_used.clone()),
+            mirror: Some(asset_url.clone()),
             version: Some(version.clone()),
             sha256: Some(digest.clone()),
         },
     );
 
-    let ver_line = match verify_binary(&tmp_path) {
-        Ok(v) => v,
-        Err(e) => {
-            let _ = fs::remove_file(&tmp_path);
-            return Err(e);
+    let version_line = match verify_binary(&temp_path) {
+        Ok(version) => version,
+        Err(error) => {
+            let _ = fs::remove_file(&temp_path);
+            return Err(error);
         }
     };
 
@@ -801,21 +817,21 @@ pub async fn install_cli_latest(
         &app,
         CliInstallProgress {
             phase: "linking".into(),
-            message: "Installing to ~/.grok/bin…".into(),
+            message: "Installing Supercharge to ~/.local/bin…".into(),
             percent: Some(96.0),
             bytes_downloaded: None,
             total_bytes: None,
-            mirror: Some(mirror_used.clone()),
+            mirror: Some(asset_url.clone()),
             version: Some(version.clone()),
             sha256: Some(digest.clone()),
         },
     );
 
-    let linked = link_install(&tmp_path, &version)?;
-    let _ = fs::remove_file(tmp_path.with_extension("sha256"));
-    let probe = cli_probe::probe_cli(Some(linked.to_string_lossy().as_ref()));
-    let path = probe.path.or_else(|| Some(linked.display().to_string()));
-    let version_out = probe.version.or(Some(ver_line));
+    let installed = install_binary(&temp_path, &version)?;
+    let _ = fs::remove_file(temp_path.with_extension("sha256"));
+    let probe = cli_probe::probe_cli(Some(installed.to_string_lossy().as_ref()));
+    let path = probe.path.or_else(|| Some(installed.display().to_string()));
+    let installed_version = probe.version.or(Some(version_line));
 
     emit(
         &app,
@@ -823,14 +839,14 @@ pub async fn install_cli_latest(
             phase: "done".into(),
             message: format!(
                 "Installed {} (sha256 {})",
-                version_out.as_deref().unwrap_or(&version),
+                installed_version.as_deref().unwrap_or(&version),
                 &digest[..12]
             ),
             percent: Some(100.0),
             bytes_downloaded: None,
             total_bytes: None,
-            mirror: Some(mirror_used.clone()),
-            version: version_out.clone(),
+            mirror: Some(asset_url.clone()),
+            version: installed_version.clone(),
             sha256: Some(digest.clone()),
         },
     );
@@ -838,32 +854,32 @@ pub async fn install_cli_latest(
     Ok(CliInstallResult {
         ok: true,
         path,
-        version: version_out,
-        mirror_used: Some(mirror_used),
-        message: "Grok Build installed".into(),
+        version: installed_version,
+        mirror_used: Some(asset_url),
+        message: "Supercharge installed".into(),
         sha256: Some(digest),
         checksum_verified: Some(checksum_verified),
     })
 }
 
-/// Install command strings for copy-paste fallback (platform-specific).
+/// Public installer command and release documentation for manual fallback.
 pub fn install_commands() -> serde_json::Value {
     #[cfg(target_os = "windows")]
     {
         serde_json::json!({
-            "primary": "irm https://x.ai/cli/install.ps1 | iex",
+            "primary": format!("irm {INSTALL_SCRIPT_BASE}/install.ps1 | iex"),
             "shell": "powershell",
-            "docsUrl": "https://docs.x.ai/build/overview",
-            "mirrors": MIRROR_BASES,
+            "docsUrl": RELEASE_REPO_URL,
+            "mirrors": [RELEASE_DOWNLOAD_BASE, RELEASE_LATEST_BASE],
         })
     }
     #[cfg(not(target_os = "windows"))]
     {
         serde_json::json!({
-            "primary": "curl -fsSL https://x.ai/cli/install.sh | bash",
+            "primary": format!("curl -fsSL {INSTALL_SCRIPT_BASE}/install.sh | bash"),
             "shell": "bash",
-            "docsUrl": "https://docs.x.ai/build/overview",
-            "mirrors": MIRROR_BASES,
+            "docsUrl": RELEASE_REPO_URL,
+            "mirrors": [RELEASE_DOWNLOAD_BASE, RELEASE_LATEST_BASE],
         })
     }
 }
@@ -873,49 +889,94 @@ mod tests {
     use super::*;
 
     #[test]
-    fn allowlist_accepts_official_mirrors_only() {
+    fn allowlist_accepts_public_release_contract() {
+        assert!(is_allowed_download_url(RELEASE_API_URL));
         assert!(is_allowed_download_url(
-            "https://storage.googleapis.com/grok-build-public-artifacts/cli/stable"
+            "https://github.com/iotserver24/supercharge-releases/releases/latest/download/version"
         ));
         assert!(is_allowed_download_url(
-            "https://storage.googleapis.com/grok-build-public-artifacts/cli/grok-0.2.111-macos-aarch64"
+            "https://github.com/iotserver24/supercharge-releases/releases/download/v1.0.5/supercharge-macos-aarch64"
         ));
         assert!(is_allowed_download_url(
-            "https://x.ai/cli/grok-0.2.111-macos-x86_64"
+            "https://github.com/iotserver24/supercharge-releases/releases/download/v1.0.5/SHA256SUMS"
         ));
-        assert!(is_allowed_download_url("https://x.ai/cli/SHA256SUMS"));
+        assert!(is_allowed_download_url(
+            "https://release-assets.githubusercontent.com/github-production-release-asset/123/abc?sp=r"
+        ));
+        assert!(is_allowed_download_url(
+            "https://objects.githubusercontent.com/github-production-release-asset/foo"
+        ));
     }
 
     #[test]
-    fn allowlist_rejects_http_and_foreign_hosts() {
+    fn allowlist_rejects_http_foreign_repo_and_traversal() {
         assert!(!is_allowed_download_url(
-            "http://storage.googleapis.com/grok-build-public-artifacts/cli/stable"
+            "http://github.com/iotserver24/supercharge-releases/releases/latest/download/version"
         ));
         assert!(!is_allowed_download_url(
-            "https://evil.example/cli/grok-0.2.111-macos-aarch64"
+            "https://evil.example/supercharge-linux-x86_64"
         ));
         assert!(!is_allowed_download_url(
-            "https://storage.googleapis.com/other-bucket/cli/stable"
+            "https://api.github.com/repos/other/supercharge-releases/releases/latest"
         ));
-        assert!(!is_allowed_download_url("https://x.ai/not-cli/payload"));
         assert!(!is_allowed_download_url(
-            "https://user:pass@x.ai/cli/stable"
+            "https://github.com/other/supercharge-releases/releases/download/v1.0.5/supercharge-linux-x86_64"
         ));
-        assert!(!is_allowed_download_url("https://x.ai/cli/../etc/passwd"));
+        assert!(!is_allowed_download_url(
+            "https://github.com/iotserver24/supercharge-releases/releases/download/v1.0.5/../secret"
+        ));
+        assert!(!is_allowed_download_url(
+            "https://user:pass@github.com/iotserver24/supercharge-releases/releases/latest/download/version"
+        ));
         assert!(!is_allowed_download_url(""));
-        assert!(!is_allowed_download_url("ftp://x.ai/cli/stable"));
+        assert!(!is_allowed_download_url("ftp://github.com/file"));
+    }
+
+    #[test]
+    fn release_versions_are_normalized_and_validated() {
+        assert_eq!(normalize_version("v1.2.3\n").as_deref(), Some("1.2.3"));
+        assert_eq!(
+            normalize_version("1.2.3-beta.1").as_deref(),
+            Some("1.2.3-beta.1")
+        );
+        assert!(normalize_version("latest").is_none());
+        assert!(normalize_version("1.2").is_none());
+        assert!(normalize_version("1.2.3/asset").is_none());
+        assert!(normalize_version("1.2.3-..").is_none());
+
+        assert_eq!(
+            parse_latest_release_version(r#"{"tag_name":"v1.0.32"}"#).unwrap(),
+            "1.0.32"
+        );
+        assert!(parse_latest_release_version(r#"{"name":"missing"}"#).is_err());
+    }
+
+    #[test]
+    fn assets_match_public_release_names() {
+        assert_eq!(
+            artifact_name_for("linux", "x86_64"),
+            "supercharge-linux-x86_64"
+        );
+        assert_eq!(
+            artifact_name_for("macos", "aarch64"),
+            "supercharge-macos-aarch64"
+        );
+        assert_eq!(
+            artifact_name_for("windows", "x86_64"),
+            "supercharge-windows-x86_64.exe"
+        );
     }
 
     #[test]
     fn parse_checksum_gnu_sha256sum_format() {
         let body = "\
 # comment
-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  grok-0.2.111-macos-aarch64
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  supercharge-macos-aarch64
 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb *other-file
 ";
-        let h = parse_checksum_for_file(body, "grok-0.2.111-macos-aarch64").unwrap();
+        let hash = parse_checksum_for_file(body, "supercharge-macos-aarch64").unwrap();
         assert_eq!(
-            h,
+            hash,
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         );
     }
@@ -930,52 +991,52 @@ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb *other-file
     }
 
     #[test]
-    fn parse_checksum_ignores_garbage() {
+    fn parse_checksum_ignores_garbage_and_wrong_name() {
         assert!(parse_checksum_for_file("not a hash", "f").is_none());
         assert!(parse_checksum_for_file("abcd short", "f").is_none());
-    }
-
-    #[test]
-    fn parse_checksum_mismatch_name_skipped_for_multi_line() {
         let body = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  wrong-name\n";
-        // multi-line with name mismatch → None (no bare single-line fallback when name present)
         assert!(parse_checksum_for_file(body, "right-name").is_none());
     }
 
     #[test]
-    fn require_checksum_policy_default_and_strict_env() {
-        // Env mutation must be serialized — cargo runs unit tests in parallel.
+    fn require_checksum_policy_uses_supercharge_flags() {
         static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
-        // Official mirrors omit sidecars; default must not block install (#227).
-        std::env::remove_var("GROK_CLI_ALLOW_UNVERIFIED");
-        std::env::remove_var("GROK_CLI_REQUIRE_CHECKSUM");
+        std::env::remove_var("SUPERCHARGE_CLI_ALLOW_UNVERIFIED");
+        std::env::remove_var("SUPERCHARGE_CLI_REQUIRE_CHECKSUM");
         assert!(!require_published_checksum(false));
         assert!(!require_published_checksum(true));
 
-        // Strict env fails closed unless allow_unverified / ALLOW_UNVERIFIED.
-        std::env::set_var("GROK_CLI_REQUIRE_CHECKSUM", "1");
+        std::env::set_var("SUPERCHARGE_CLI_REQUIRE_CHECKSUM", "1");
         assert!(require_published_checksum(false));
         assert!(!require_published_checksum(true));
-        std::env::set_var("GROK_CLI_ALLOW_UNVERIFIED", "1");
+        std::env::set_var("SUPERCHARGE_CLI_ALLOW_UNVERIFIED", "yes");
         assert!(!require_published_checksum(false));
 
-        std::env::remove_var("GROK_CLI_REQUIRE_CHECKSUM");
-        std::env::remove_var("GROK_CLI_ALLOW_UNVERIFIED");
+        std::env::remove_var("SUPERCHARGE_CLI_REQUIRE_CHECKSUM");
+        std::env::remove_var("SUPERCHARGE_CLI_ALLOW_UNVERIFIED");
     }
 
     #[test]
-    fn sha256_file_matches_known_digest() {
-        let dir = std::env::temp_dir().join(format!("cli-hash-{}", std::process::id()));
+    fn manual_install_command_uses_public_supercharge_script() {
+        let commands = install_commands();
+        let primary = commands["primary"].as_str().unwrap();
+        assert!(primary.contains(
+            "raw.githubusercontent.com/iotserver24/supercharge-releases/main/scripts/install."
+        ));
+        assert_eq!(commands["docsUrl"], RELEASE_REPO_URL);
+    }
+
+    #[test]
+    fn sha256_file_matches_stable_digest() {
+        let dir = std::env::temp_dir().join(format!("supercharge-cli-hash-{}", std::process::id()));
         let _ = fs::create_dir_all(&dir);
         let path = dir.join("blob.bin");
-        fs::write(&path, b"grok-cli-test-bytes").unwrap();
+        fs::write(&path, b"supercharge-cli-test-bytes").unwrap();
         let got = sha256_file(&path).unwrap();
-        // echo -n 'grok-cli-test-bytes' | shasum -a 256
         assert_eq!(got.len(), 64);
         assert!(got.chars().all(|c| c.is_ascii_hexdigit()));
-        // re-hash same content → stable
         assert_eq!(got, sha256_file(&path).unwrap());
         let _ = fs::remove_dir_all(&dir);
     }

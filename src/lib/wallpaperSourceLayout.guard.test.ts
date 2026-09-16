@@ -24,15 +24,12 @@ const gallery = readFileSync(
 );
 
 describe("wallpaper source layout guard", () => {
-  it("keeps all seven grouped sources visible without horizontal scrolling", () => {
+  it("keeps all generic grouped sources visible without horizontal scrolling", () => {
     expect(modalCss).toMatch(
       /\.modal\.glass-modal\.wallpaper-source-modal\s*\{[^}]*width:\s*min\(1440px,/s,
     );
     expect(modalCss).toMatch(
-      /\.wallpaper-source-tabs\s*\{[^}]*display:\s*grid[^}]*grid-template-areas:\s*"discovery create personal"[^}]*overflow:\s*visible/s,
-    );
-    expect(sourceCss).toMatch(
-      /@media \(max-width: 1000px\)[\s\S]*?\.wallpaper-source-tabs\s*\{[^}]*"discovery discovery"\s*"create personal"/s,
+      /\.wallpaper-source-tabs\s*\{[^}]*display:\s*grid[^}]*overflow:\s*visible/s,
     );
     expect(sourceCss).toMatch(
       /@media \(max-width: 520px\)[\s\S]*?\.wallpaper-source-tabs__group--discovery\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s,
@@ -43,15 +40,13 @@ describe("wallpaper source layout guard", () => {
     expect(tabs).not.toMatch(/scrollIntoView\s*\(/);
     expect(
       tabs.match(
-        /id:\s*"(?:x|web|openverse|pexels|imagine|grok_album|library)"/g,
+        /id:\s*"(?:web|openverse|pexels|library)"/g,
       ),
-    ).toHaveLength(7);
+    ).toHaveLength(4);
   });
 
-  it("keeps route choice contextual and paged results stable", () => {
-    expect(controls).toMatch(
-      /wallpaper-source-form__row--x[\s\S]*wallpaper-source-form__input[\s\S]*\{xRouteControl\}[\s\S]*wallpaper-source-form__select/s,
-    );
+  it("keeps generic paged results stable", () => {
+    expect(controls).not.toMatch(/xRouteControl|wallpaper-source-form__row--x/);
     expect(sourceCss).toMatch(
       /\.wallpaper-masonry--stable\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(3,/s,
     );

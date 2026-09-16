@@ -26,7 +26,7 @@ export type MirrorWriteAuditEvent = {
   note?: string;
 };
 
-export const MIRROR_WRITE_AUDIT_STORAGE_KEY = "grok.mirrorWriteAudit";
+export const MIRROR_WRITE_AUDIT_STORAGE_KEY = "supercharge.mirrorWriteAudit";
 export const MIRROR_WRITE_AUDIT_MAX = 50;
 /** Cap free-form note length (localStorage + UI). */
 export const MIRROR_WRITE_AUDIT_NOTE_MAX = 200;

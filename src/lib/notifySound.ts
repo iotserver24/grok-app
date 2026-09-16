@@ -4,7 +4,7 @@
  * Default: off.
  */
 
-export const NOTIFY_SOUND_STORAGE_KEY = "grok.notifySound";
+export const NOTIFY_SOUND_STORAGE_KEY = "supercharge.notifySound";
 
 /** Fired on `window` after a successful save (detail = boolean enabled). */
 export const NOTIFY_SOUND_CHANGE_EVENT = "grok-notify-sound-change";

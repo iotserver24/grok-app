@@ -281,7 +281,7 @@ export function formatUsageResetTime(
 
 // ── In-memory per-session store (App process lifetime) ────────────────
 
-const SPEND_STORE_KEY = "grok.sessionSpend.v1";
+const SPEND_STORE_KEY = "supercharge.sessionSpend.v1";
 
 const spendBySession = new Map<string, SessionSpend>();
 const listeners = new Set<(sessionId: string) => void>();

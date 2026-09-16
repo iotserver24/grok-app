@@ -19,8 +19,8 @@ import {
 import { credentialsRefFor } from "./secretsApi";
 import { isWecomLoopbackAdvisory } from "./wecomConfig";
 
-const LS_CHANNELS = "grok-app.remoteIm.channels";
-const LS_BRIDGE = "grok-app.remoteIm.bridge";
+const LS_CHANNELS = "supercharge-app.remoteIm.channels";
+const LS_BRIDGE = "supercharge-app.remoteIm.bridge";
 
 export function defaultAcl(): AclConfig {
   return {

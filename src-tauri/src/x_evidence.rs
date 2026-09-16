@@ -1,4 +1,4 @@
-//! X Evidence Rail — search X via headless Grok CLI and persist every post as
+//! X Evidence Rail — search X via headless Supercharge CLI and persist every post as
 //! a local *evidence row* (sqlite), so later agent turns can list / re-read /
 //! quote it without re-searching or hallucinating URLs.
 //!
@@ -369,7 +369,7 @@ fn has_items_array(v: &serde_json::Value) -> bool {
     v.get("items").map(|i| i.is_array()).unwrap_or(false)
 }
 
-/// Unwrap headless `grok -p --output-format json` envelopes down to the
+/// Unwrap headless `supercharge -p --output-format json` envelopes down to the
 /// `{ "items": [...] }` object (direct, `structuredOutput`, or nested `text`).
 fn extract_items_value(raw: &str) -> Option<serde_json::Value> {
     let env = first_json_object(raw.trim())?;

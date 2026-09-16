@@ -1,7 +1,7 @@
-//! Cross-session memory (Grok Build experimental) — spawn flags, env, config.
+//! Cross-session memory (Supercharge experimental) — spawn flags, env, config.
 //!
 //! CLI: `--experimental-memory` / `--no-memory`, `GROK_MEMORY`, `[memory] enabled`,
-//! `grok memory clear`.
+//! `supercharge memory clear`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -59,7 +59,7 @@ pub fn sync_memory_to_agent_profile(
     Ok(())
 }
 
-/// Args for `grok memory clear`. Unknown scope is an error (never default to workspace).
+/// Args for `supercharge memory clear`. Unknown scope is an error (never default to workspace).
 pub fn memory_clear_cli_args(scope: &str) -> Result<Vec<&'static str>, String> {
     match scope.trim().to_ascii_lowercase().as_str() {
         "global" => Ok(vec!["memory", "clear", "-y", "--global"]),
@@ -69,7 +69,7 @@ pub fn memory_clear_cli_args(scope: &str) -> Result<Vec<&'static str>, String> {
     }
 }
 
-/// Resolve cwd for `grok memory clear`. Workspace / all never fall back to `$HOME`.
+/// Resolve cwd for `supercharge memory clear`. Workspace / all never fall back to `$HOME`.
 pub fn resolve_memory_clear_cwd(cwd: Option<&Path>, scope: &str) -> Result<PathBuf, String> {
     let scope = scope.trim().to_ascii_lowercase();
     let dir = cwd.map(Path::to_path_buf).filter(|p| p.is_dir());
@@ -89,7 +89,7 @@ pub struct MemoryClearResult {
     pub cwd: String,
 }
 
-/// Run `grok memory clear` scoped to `cwd` (project path when available).
+/// Run `supercharge memory clear` scoped to `cwd` (project path when available).
 pub fn clear_workspace_memory(
     cwd: Option<&Path>,
     session_data_mode: &str,
@@ -100,7 +100,7 @@ pub fn clear_workspace_memory(
     let cli_path = probe
         .path
         .filter(|_| probe.found)
-        .ok_or_else(|| "Grok Build CLI not found".to_string())?;
+        .ok_or_else(|| "Supercharge CLI not found".to_string())?;
 
     let args = memory_clear_cli_args(scope)?;
     let work_dir = resolve_memory_clear_cwd(cwd, scope)?;
@@ -110,7 +110,7 @@ pub fn clear_workspace_memory(
     let mut cmd = Command::new(&cli_path);
     cmd.args(&args)
         .current_dir(&work_dir)
-        .env("GROK_HOME", &grok_home);
+        .env("SUPERCHARGE_HOME", &grok_home);
     if let Some(path) = process_util::enriched_path_env() {
         cmd.env("PATH", path);
     }
@@ -146,12 +146,12 @@ pub fn clear_workspace_memory(
 /// Apply spawn flag + env on a tokio Command (top-level, before `agent`).
 pub fn apply_memory_to_command(cmd: &mut tokio::process::Command, enabled: bool) {
     cmd.arg(memory_spawn_flag(enabled));
-    cmd.env("GROK_MEMORY", memory_spawn_env_value(enabled));
+    cmd.env("SUPERCHARGE_MEMORY", memory_spawn_env_value(enabled));
 }
 
 // ── Memory browser (disk inspect under GROK_HOME/memory) ───────────────────
 //
-// Grok Build layout (from CLI user guide):
+// Supercharge layout (from CLI user guide):
 //   {GROK_HOME}/memory/MEMORY.md                         — global
 //   {GROK_HOME}/memory/<project-slug>-<hash8>/MEMORY.md  — workspace
 //   {GROK_HOME}/memory/<slug>/sessions/*.md              — session logs
@@ -825,8 +825,8 @@ pub struct MemorySearchResult {
     pub search_kind: String,
 }
 
-/// Whether Grok Build exposes a host-invocable hybrid memory search CLI.
-/// Documented `false` as of CLI 0.2.117 (`grok memory` → only `clear`).
+/// Whether Supercharge exposes a host-invocable hybrid memory search CLI.
+/// Documented `false` as of CLI 0.2.117 (`supercharge memory` → only `clear`).
 pub const CLI_MEMORY_HYBRID_SEARCH_AVAILABLE: bool = false;
 
 /// Resolve App browser `search_kind` (pure).

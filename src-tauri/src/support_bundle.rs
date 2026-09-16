@@ -19,7 +19,7 @@ use crate::store;
 const EXPORT_CLI_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Best-effort CLI probe with a hard wall-clock timeout so export never stalls
-/// when `grok --version` hangs on a bad path.
+/// when `supercharge --version` hangs on a bad path.
 fn soft_cli_probe_for_export(manual_path: Option<&str>) -> serde_json::Value {
     let manual = manual_path.map(|s| s.to_string());
     let (tx, rx) = mpsc::channel();
@@ -158,7 +158,7 @@ pub fn write_support_bundle(
     }
 
     // README for the recipient
-    let readme = "Grok App support bundle\n\
+    let readme = "Supercharge App support bundle\n\
 \n\
 Contents:\n\
 - doctor.json — health checks (paths only, no keys)\n\
@@ -357,7 +357,7 @@ pub fn write_session_bundle(
     // ── logs/ — app log dir (if any) ───────────────────────────────────────
     append_app_logs(&mut zip, opts)?;
 
-    // ── agent/ — Grok Build session trail ──────────────────────────────────
+    // ── agent/ — Supercharge session trail ──────────────────────────────────
     if let Some(dir) = agent_dir.as_ref() {
         append_agent_session_files(&mut zip, opts, dir)?;
         let note = serde_json::json!({
@@ -379,7 +379,7 @@ pub fn write_session_bundle(
     }
 
     let readme = format!(
-        "Grok App session diagnostic bundle\n\
+        "Supercharge App session diagnostic bundle\n\
 \n\
 Session: {session_id}\n\
 Title: {}\n\
@@ -393,9 +393,9 @@ Contents:\n\
 - host/settings.json — app settings (secrets redacted)\n\
 - host/runtime.json — live/parked process snapshot (if attached)\n\
 - host/project.json — bound project (if any)\n\
-- host/cli_probe.json — Grok Build CLI discovery\n\
+- host/cli_probe.json — Supercharge CLI discovery\n\
 - logs/ — recent App log files (if present)\n\
-- agent/ — Grok Build session trail (events, history, terminal logs)\n\
+- agent/ — Supercharge session trail (events, history, terminal logs)\n\
 \n\
 Never includes secrets.json, OS keychain material, or raw API keys.\n\
 Attach this zip when reporting bugs such as early end_turn / mid-task stop.\n\

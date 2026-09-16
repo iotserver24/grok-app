@@ -10,7 +10,7 @@
 export type MessageActionsVisibility = "hover" | "always";
 
 export const MESSAGE_ACTIONS_VISIBILITY_STORAGE_KEY =
-  "grok.messageActionsVisibility";
+  "supercharge.messageActionsVisibility";
 export const DEFAULT_MESSAGE_ACTIONS_VISIBILITY: MessageActionsVisibility =
   "always";
 export const MESSAGE_ACTIONS_VISIBILITY_ATTR = "data-msg-actions";

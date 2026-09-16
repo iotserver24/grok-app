@@ -1,6 +1,6 @@
 /**
- * Composer dictation FSM + live-voice overlay open state.
- * Host still owns settings (voiceId / STT / auto-send) and send();
+ * Composer dictation FSM.
+ * Host still owns STT / auto-send settings and send();
  * this hook owns capture, STT, draft insert, and gate refresh.
  */
 import {
@@ -78,7 +78,6 @@ export function useVoiceDictation(opts: {
   sessionStateRef.current = opts.sessionState;
 
   const [voice, setVoice] = useState<VoiceFsmState>(() => initialVoiceState());
-  const [liveVoiceOpen, setLiveVoiceOpen] = useState(false);
   const [voiceGate, setVoiceGate] = useState<VoiceGate>({
     available: false,
     reason: "not_available",
@@ -181,10 +180,7 @@ export function useVoiceDictation(opts: {
     if (voiceIsActive(voiceRef.current.phase)) {
       cancelVoice();
     }
-    if (liveVoiceOpen) {
-      setLiveVoiceOpen(false);
-    }
-  }, [cancelVoice, liveVoiceOpen, voiceGate.available]);
+  }, [cancelVoice, voiceGate.available]);
 
   useEffect(() => {
     const onVoiceSession = () => {
@@ -400,31 +396,9 @@ export function useVoiceDictation(opts: {
     void startVoice();
   }, [cancelVoice, startVoice, stopVoice]);
 
-  const startLiveVoice = useCallback(() => {
-    if (!voiceGate.available) {
-      notifyRef.current(
-        voiceErrorMessage(voiceGate.reason ?? "not_available"),
-        4200,
-      );
-      return;
-    }
-    if (voiceIsActive(voiceRef.current.phase)) {
-      cancelVoice();
-    }
-    setLiveVoiceOpen(true);
-  }, [
-    cancelVoice,
-    notifyRef,
-    voiceErrorMessage,
-    voiceGate.available,
-    voiceGate.reason,
-  ]);
-
   return {
     voice,
     voiceRef,
-    liveVoiceOpen,
-    setLiveVoiceOpen,
     voiceGate,
     voiceErrorMessage,
     voiceStealsEscape: voiceStealsEscape(voice.phase),
@@ -432,7 +406,6 @@ export function useVoiceDictation(opts: {
     startVoice,
     stopVoice,
     toggleVoice,
-    startLiveVoice,
     refreshVoiceGate,
   };
 }

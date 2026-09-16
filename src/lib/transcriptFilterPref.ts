@@ -11,7 +11,7 @@
 import type { ChatMessage } from "./session";
 import { filterTranscriptMessages, isToolStepMessage } from "./session";
 
-export const TRANSCRIPT_FILTER_STORAGE_KEY = "grok.transcriptFilter";
+export const TRANSCRIPT_FILTER_STORAGE_KEY = "supercharge.transcriptFilter";
 
 /** Fired on `window` after a successful save (detail = TranscriptFilterMode). */
 export const TRANSCRIPT_FILTER_CHANGE_EVENT = "grok-transcript-filter-change";

@@ -8,8 +8,8 @@
  * menus go unreadable.
  */
 
-export const TEXT_COLOR_STORAGE_KEY = "grok-app.text-color";
-export const FONT_SHADOW_STORAGE_KEY = "grok-app.font-shadow";
+export const TEXT_COLOR_STORAGE_KEY = "supercharge-app.text-color";
+export const FONT_SHADOW_STORAGE_KEY = "supercharge-app.font-shadow";
 
 /** `null` = follow theme (near-black on light, near-white on dark). */
 export const DEFAULT_TEXT_COLOR: string | null = null;

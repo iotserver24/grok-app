@@ -139,7 +139,7 @@ export type LiveUsageMap = Record<
 
 // ── Storage ring (local only) ──────────────────────────────────────────
 
-export const COST_USAGE_SAMPLES_STORAGE_KEY = "grok.costUsageSamples";
+export const COST_USAGE_SAMPLES_STORAGE_KEY = "supercharge.costUsageSamples";
 export const COST_USAGE_SAMPLES_MAX = 400;
 /** Fired on `window` after record/clear (detail = samples). */
 export const COST_USAGE_SAMPLES_CHANGE_EVENT = "grok-cost-usage-samples-change";

@@ -1,7 +1,7 @@
 //! Codebase indexing — allowlisted read/write of
 //! `[features].codebase_indexing` in the active `GROK_HOME` `config.toml`.
 //!
-//! ## Semantics (Grok Build user guide)
+//! ## Semantics (Supercharge user guide)
 //! - **Code graph** indexing for search / code-nav — **not** memory embeddings.
 //! - CLI default when unset: **true**.
 //! - Value may be bool or richer forms (globs). App writes **bool only**.

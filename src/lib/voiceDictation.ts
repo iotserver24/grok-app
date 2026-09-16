@@ -440,24 +440,8 @@ export function resolveVoiceMicChrome(opts: {
   phase: VoicePhase;
   gateAvailable: boolean;
   autoSend: boolean;
-  liveVoiceOpen: boolean;
   canType: boolean;
 }): VoiceMicChrome {
-  const active = voiceIsActive(opts.phase);
-  if (opts.liveVoiceOpen && !active) {
-    return {
-      labelKind: opts.gateAvailable
-        ? opts.autoSend
-          ? "idle_send"
-          : "idle_insert"
-        : "unavailable",
-      interactive: false,
-      ariaPressed: false,
-      liveClass: false,
-      busyClass: false,
-      unavailableClass: !opts.gateAvailable,
-    };
-  }
   if (opts.phase === "recording") {
     return {
       labelKind: "listening",

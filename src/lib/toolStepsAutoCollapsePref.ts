@@ -4,7 +4,7 @@
  * Default: true (tool rows start collapsed, including while running — #1018).
  */
 
-export const TOOL_STEPS_AUTO_COLLAPSE_STORAGE_KEY = "grok.toolStepsAutoCollapse";
+export const TOOL_STEPS_AUTO_COLLAPSE_STORAGE_KEY = "supercharge.toolStepsAutoCollapse";
 
 /** Fired on `window` after a successful save (detail = boolean autoCollapse). */
 export const TOOL_STEPS_AUTO_COLLAPSE_CHANGE_EVENT =

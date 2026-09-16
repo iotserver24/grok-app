@@ -13,7 +13,9 @@ const phoneCss = readFileSync(
 
 describe("new-chat welcome intro", () => {
   it("runs only on the empty welcome surface and settles after the type reveal", () => {
-    expect(app).toContain("welcomeSession && welcomeBrandKind && !sideDockActive");
+    expect(app).toContain("welcomeSession && !sideDockActive");
+    expect(app).toContain('aria-label={tr("app.name")}');
+    expect(app).not.toContain("<SuperGrokMark");
     expect(app).toContain("useState(\n    welcomeMotionEnabled,\n  )");
     expect(app).toContain("welcomeMotionEnabled && welcomeIntroActive");
     expect(app).toContain("setWelcomeIntroActive(welcomeMotionEnabled)");

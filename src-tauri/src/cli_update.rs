@@ -1,15 +1,15 @@
-//! CLI update check via `grok update --check --json`.
+//! CLI update check via `supercharge update --check --json`.
 //!
 //! ## Install choice
-//! When a resolved binary exists, install runs `grok update` so the CLI keeps
+//! When a resolved binary exists, install runs `supercharge update` so the CLI keeps
 //! its channel (stable/alpha) and internal installer. If the binary is missing
-//! or `grok update` fails, we fall back to [`crate::cli_install::install_cli_latest`]
+//! or `supercharge update` fails, we fall back to [`crate::cli_install::install_cli_latest`]
 //! (multi-mirror + checksum trust chain + progress events) — safer for first-time
 //! installs and when self-update is broken.
 //!
 //! ## Channels (CLI ≥ 0.2.117)
-//! `grok update --check --json` may report `channel` (`stable` / `alpha`).
-//! Switch with `grok update --alpha` / `--stable`; pin with `--version <V>`.
+//! `supercharge update --check --json` may report `channel` (`stable` / `alpha`).
+//! Switch with `supercharge update --alpha` / `--stable`; pin with `--version <V>`.
 //! App never invents channels — unknown/missing values surface as unknown.
 
 use std::path::Path;
@@ -25,9 +25,8 @@ use crate::cli_probe;
 use crate::process_util;
 
 const CHECK_TIMEOUT: Duration = Duration::from_secs(45);
-const UPDATE_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// Known Grok Build CLI release channels from `grok update --check --json`.
+/// Known Supercharge CLI release channels from `supercharge update --check --json`.
 /// Do **not** invent extra channels — only map what the CLI documents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CliReleaseChannel {
@@ -93,7 +92,7 @@ pub fn app_version_below_cli_upgrade_floor(app_version: &str) -> bool {
     }
 }
 
-/// Options for `grok update` install / channel switch / version pin.
+/// Options for `supercharge update` install / channel switch / version pin.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CliUpdateInstallOpts {
     /// Switch release channel (`stable` / `alpha`). Mutually exclusive with pin.
@@ -131,7 +130,7 @@ pub fn is_valid_cli_version_pin(raw: &str) -> bool {
     has_digit
 }
 
-/// Build argv after the binary for `grok update …` (without the program name).
+/// Build argv after the binary for `supercharge update …` (without the program name).
 /// Pure helper — soft-fails with Err when opts are invalid or invent a channel.
 pub fn build_update_args(opts: &CliUpdateInstallOpts) -> Result<Vec<String>, String> {
     let channel_raw = opts
@@ -172,7 +171,7 @@ pub fn build_update_args(opts: &CliUpdateInstallOpts) -> Result<Vec<String>, Str
     Ok(args)
 }
 
-/// Parsed `grok update --check --json` payload (camelCase).
+/// Parsed `supercharge update --check --json` payload (camelCase).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CliUpdateCheck {
@@ -209,7 +208,7 @@ pub struct CliUpdateCheck {
     pub app_behind: Option<bool>,
 }
 
-/// Parse stdout from `grok update --check --json` into a typed DTO.
+/// Parse stdout from `supercharge update --check --json` into a typed DTO.
 /// Tolerant of extra fields; requires current/latest version strings.
 pub fn parse_update_check_json(raw: &str) -> Result<CliUpdateCheck, String> {
     let trimmed = raw.trim();
@@ -375,7 +374,7 @@ fn normalize_ver(s: &str) -> String {
 pub fn check_cli_update(manual_path: Option<&str>) -> Result<CliUpdateCheck, String> {
     let probe = cli_probe::probe_cli(manual_path);
     let path = probe.path.filter(|_| probe.found).ok_or_else(|| {
-        "Grok Build CLI not found — install or set the path under Runtime".to_string()
+        "Supercharge CLI not found — install or set the path under Runtime".to_string()
     })?;
 
     let output = run_cli_with_timeout(
@@ -396,7 +395,7 @@ pub fn check_cli_update(manual_path: Option<&str>) -> Result<CliUpdateCheck, Str
 
 fn strip_grok_prefix(v: &str) -> String {
     let t = v.trim();
-    // e.g. "grok 0.2.111" / "Grok Build 0.2.111"
+    // e.g. "grok 0.2.111" / "Supercharge 0.2.111"
     let lower = t.to_ascii_lowercase();
     for prefix in ["grok build ", "grok "] {
         if lower.starts_with(prefix) {
@@ -406,11 +405,10 @@ fn strip_grok_prefix(v: &str) -> String {
     t.to_string()
 }
 
-/// Install / switch CLI: prefer `grok update` (with optional channel/version),
-/// else App install trust-chain for plain latest only.
+/// Install the Supercharge CLI through the app's release trust chain.
 ///
-/// Channel switch and version pin never fall back to the App trust-chain
-/// (which always pulls stable latest). Soft-fail with Err instead.
+/// Channel switches and version pins are not available until the Supercharge
+/// release repository publishes matching channel/version artifacts.
 ///
 /// When the running App is behind (absolute floor and/or newer App on GitHub),
 /// refuse unless `acknowledge_app_behind` (#1009). Network failure on the App
@@ -439,75 +437,53 @@ pub async fn install_cli_update(
         }
     }
 
-    let settings = crate::store::load_settings();
-    let manual = settings.manual_cli_path.clone();
-    let probe = cli_probe::probe_cli(manual.as_deref());
-
     let args = build_update_args(&opts)?;
     let specialized = opts.channel.is_some() || opts.version.is_some();
-    let args_label = args.join(" ");
-
-    if probe.found {
-        if let Some(path) = probe.path.clone() {
-            info!("cli_update_install: running `{path} {args_label}`");
-            let args_owned = args.clone();
-            match tauri::async_runtime::spawn_blocking({
-                let path = path.clone();
-                move || {
-                    let arg_refs: Vec<&str> = args_owned.iter().map(|s| s.as_str()).collect();
-                    run_cli_with_timeout(Path::new(&path), &arg_refs, UPDATE_TIMEOUT)
-                }
-            })
-            .await
-            {
-                Ok(Ok(stdout)) => {
-                    // Re-probe after update.
-                    let after = cli_probe::probe_cli(manual.as_deref());
-                    let version = after
-                        .version
-                        .map(|v| strip_grok_prefix(&v))
-                        .or_else(|| extract_version_hint(&stdout));
-                    let message = if let Some(ch) = opts.channel.as_deref() {
-                        format!("Switched CLI channel via `grok update --{ch}`")
-                    } else if let Some(ver) = opts.version.as_deref() {
-                        format!("Installed CLI {ver} via `grok update --version`")
-                    } else {
-                        "Updated via `grok update`".into()
-                    };
-                    return Ok(CliInstallResult {
-                        ok: true,
-                        path: after.path.or(Some(path)),
-                        version,
-                        mirror_used: Some("grok-update".into()),
-                        message,
-                        sha256: None,
-                        checksum_verified: None,
-                    });
-                }
-                Ok(Err(e)) => {
-                    if specialized {
-                        // Soft-fail: do not pull stable latest when user asked for channel/version.
-                        return Err(format!("grok {args_label} failed: {e}"));
-                    }
-                    warn!(
-                        "cli_update_install: grok update failed ({e}); falling back to install_cli_latest"
-                    );
-                }
-                Err(e) => {
-                    if specialized {
-                        return Err(format!("grok {args_label} join error: {e}"));
-                    }
-                    warn!(
-                        "cli_update_install: join error ({e}); falling back to install_cli_latest"
-                    );
-                }
+    if specialized {
+        let settings = crate::store::load_settings();
+        let manual = settings.manual_cli_path.clone();
+        let probe = cli_probe::probe_cli(manual.as_deref());
+        let path = probe.path.filter(|_| probe.found).ok_or_else(|| {
+            "Supercharge CLI not found — install or set the path under Runtime".to_string()
+        })?;
+        let args_label = args.join(" ");
+        info!("cli_update_install: running `{path} {args_label}`");
+        let stdout = tauri::async_runtime::spawn_blocking({
+            let path = path.clone();
+            let args = args.clone();
+            move || {
+                let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+                run_cli_with_timeout(Path::new(&path), &arg_refs, Duration::from_secs(600))
             }
-        }
-    } else if specialized {
-        return Err("Grok Build CLI not found — install or set the path under Runtime".into());
+        })
+        .await
+        .map_err(|error| format!("Supercharge {args_label} join error: {error}"))?
+        .map_err(|error| format!("Supercharge {args_label} failed: {error}"))?;
+        let after = cli_probe::probe_cli(manual.as_deref());
+        let version = after
+            .version
+            .map(|value| strip_grok_prefix(&value))
+            .or_else(|| extract_version_hint(&stdout));
+        let message = if let Some(channel) = opts.channel.as_deref() {
+            format!("Switched Supercharge CLI channel to {channel}")
+        } else {
+            format!(
+                "Installed Supercharge CLI {}",
+                opts.version.as_deref().unwrap_or_default()
+            )
+        };
+        return Ok(CliInstallResult {
+            ok: true,
+            path: after.path.or(Some(path)),
+            version,
+            mirror_used: Some("supercharge-update".into()),
+            message,
+            sha256: None,
+            checksum_verified: None,
+        });
     }
 
-    info!("cli_update_install: using cli_install trust-chain");
+    info!("cli_update_install: using Supercharge release trust-chain");
     let allow = crate::store::load_settings().allow_unverified_cli_install;
     let result = cli_install::install_cli_latest(app, allow).await?;
     let mut s = crate::store::load_settings();
@@ -517,19 +493,18 @@ pub async fn install_cli_update(
 }
 
 fn extract_version_hint(stdout: &str) -> Option<String> {
-    // Best-effort: look for a semver-looking token after update output.
     for line in stdout.lines() {
-        let l = line.trim();
-        if l.is_empty() {
+        let line = line.trim();
+        if line.is_empty() {
             continue;
         }
-        for token in l.split_whitespace() {
-            let t =
+        for token in line.split_whitespace() {
+            let token =
                 token.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '.' && c != '-');
-            if t.chars().filter(|c| *c == '.').count() >= 1
-                && t.chars().next().is_some_and(|c| c.is_ascii_digit())
+            if token.chars().filter(|c| *c == '.').count() >= 1
+                && token.chars().next().is_some_and(|c| c.is_ascii_digit())
             {
-                return Some(t.to_string());
+                return Some(token.to_string());
             }
         }
     }
@@ -546,7 +521,7 @@ fn run_cli_with_timeout(bin: &Path, args: &[&str], timeout: Duration) -> Result<
         cmd.args(&args_owned);
         // PATH + HOME (Windows GUI often lacks $HOME; CLI hub / update cache needs it).
         process_util::apply_cli_env_std(&mut cmd);
-        // `grok update` downloads over the network — honor the proxy (NEW-02).
+        // CLI update checks download over the network — honor the proxy (NEW-02).
         crate::proxy::apply_to_std_command(&mut cmd);
         let result = cmd.output();
         let _ = tx.send(result);
@@ -568,7 +543,7 @@ fn run_cli_with_timeout(bin: &Path, args: &[&str], timeout: Duration) -> Result<
                 } else if !out.is_empty() {
                     out.chars().take(400).collect()
                 } else {
-                    format!("grok {args_label} exited with {}", output.status)
+                    format!("supercharge {args_label} exited with {}", output.status)
                 };
                 return Err(msg);
             }
@@ -578,9 +553,9 @@ fn run_cli_with_timeout(bin: &Path, args: &[&str], timeout: Duration) -> Result<
             }
             Ok(stdout)
         }
-        Ok(Err(e)) => Err(format!("failed to run grok {args_label}: {e}")),
+        Ok(Err(e)) => Err(format!("failed to run supercharge {args_label}: {e}")),
         Err(_) => Err(format!(
-            "grok {args_label} timed out after {}s",
+            "supercharge {args_label} timed out after {}s",
             timeout.as_secs()
         )),
     }

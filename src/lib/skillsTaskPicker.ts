@@ -39,7 +39,7 @@ export function stripSkillTokensForMatch(text: string): string {
 }
 
 /** localStorage key for the recent skill-id ring. */
-export const SKILLS_RECENT_STORAGE_KEY = "grok.skillsTaskPicker.recent";
+export const SKILLS_RECENT_STORAGE_KEY = "supercharge.skillsTaskPicker.recent";
 /** Max recent skill ids kept (newest first). */
 export const SKILLS_RECENT_MAX = 12;
 

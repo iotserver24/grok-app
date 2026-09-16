@@ -1,4 +1,4 @@
-//! Auxiliary model routing — Grok Build `[models]` side-task slots.
+//! Auxiliary model routing — Supercharge `[models]` side-task slots.
 //!
 //! Mirrors Hermes-style layering using native CLI keys:
 //! `image_description`, `web_search`, `session_summary`, `prompt_suggestion`.
@@ -323,7 +323,7 @@ pub fn build_options(list: &crate::providers::ProvidersListResult) -> Vec<Models
         id: AUTO.into(),
         label: "Auto (CLI default)".into(),
         source: "auto".into(),
-        hint: "Use Grok Build built-in defaults for this task".into(),
+        hint: "Use Supercharge built-in defaults for this task".into(),
     }];
 
     opts.push(ModelsAuxOption {
@@ -460,9 +460,8 @@ pub fn get_state() -> Result<ModelsAuxState, String> {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| agent_config_toml().display().to_string())
     } else {
-        // Shared: show user grok home config for honesty (read-only).
-        crate::process_util::user_home()
-            .join(".grok")
+        // Shared: show the active Supercharge home config for honesty (read-only).
+        crate::paths::shared_supercharge_home()
             .join("config.toml")
             .display()
             .to_string()
@@ -554,7 +553,7 @@ pub fn apply_save_grok() -> Result<ModelsAuxState, String> {
     get_state()
 }
 
-/// Image file extensions that Grok Build may attach as multimodal `image_url`.
+/// Image file extensions that Supercharge may attach as multimodal `image_url`.
 const IMAGE_EXTS: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "heic", "avif",
 ];
@@ -842,16 +841,17 @@ pub fn maybe_rewrite_agent_prompt(prompt: &str) -> String {
 /// Env vars injected into every ACP agent spawn so CLI honors aux slots even if
 /// config.toml was written after the process binary cached defaults.
 ///
-/// Keys match Grok Build: `GROK_WEB_SEARCH_MODEL`, `GROK_IMAGE_DESCRIPTION_MODEL`,
-/// `GROK_SESSION_SUMMARY_MODEL`, `GROK_PROMPT_SUGGESTIONS_MODEL`.
+/// Keys match Supercharge: `SUPERCHARGE_WEB_SEARCH_MODEL`,
+/// `SUPERCHARGE_IMAGE_DESCRIPTION_MODEL`, `SUPERCHARGE_SESSION_SUMMARY_MODEL`,
+/// `SUPERCHARGE_PROMPT_SUGGESTIONS_MODEL`.
 #[allow(dead_code)]
 pub fn aux_model_spawn_env() -> Vec<(String, String)> {
     let text = read_config_text();
     let pairs = [
-        ("image_description", "GROK_IMAGE_DESCRIPTION_MODEL"),
-        ("web_search", "GROK_WEB_SEARCH_MODEL"),
-        ("session_summary", "GROK_SESSION_SUMMARY_MODEL"),
-        ("prompt_suggestion", "GROK_PROMPT_SUGGESTIONS_MODEL"),
+        ("image_description", "SUPERCHARGE_IMAGE_DESCRIPTION_MODEL"),
+        ("web_search", "SUPERCHARGE_WEB_SEARCH_MODEL"),
+        ("session_summary", "SUPERCHARGE_SESSION_SUMMARY_MODEL"),
+        ("prompt_suggestion", "SUPERCHARGE_PROMPT_SUGGESTIONS_MODEL"),
     ];
     let mut out = Vec::new();
     for (slot, env) in pairs {
@@ -862,12 +862,12 @@ pub fn aux_model_spawn_env() -> Vec<(String, String)> {
     out
 }
 
-/// Run a one-shot `grok -p` under App agent-home with an explicit model section
+/// Run a one-shot `supercharge -p` under the App-owned Supercharge home with an explicit model section
 /// id (e.g. `amux`, `yun-api`, `grok-4.5`). Independent of the interactive
 /// session's main model — Hermes-style side-channel.
 ///
 /// Used for Host-driven aux jobs (search, probes). The child inherits
-/// `GROK_HOME` so `[model.<id>]` credentials resolve correctly.
+/// `SUPERCHARGE_HOME` so `[model.<id>]` credentials resolve correctly.
 pub fn run_aux_headless(
     model_id: &str,
     prompt: &str,
@@ -889,12 +889,12 @@ pub fn run_aux_headless(
     let settings = store::load_settings();
     let mode = normalize_mode(&settings.session_data_mode);
     // Headless must use the same agent-home as interactive (custom models live there).
-    let grok_home = crate::paths::resolve_agent_grok_home(mode);
+    let supercharge_home = crate::paths::resolve_agent_supercharge_home(mode);
     let probe = crate::cli_probe::probe_cli(settings.manual_cli_path.as_deref());
     let cli = probe
         .path
         .filter(|p| !p.trim().is_empty())
-        .ok_or_else(|| "grok CLI not found".to_string())?;
+        .ok_or_else(|| "Supercharge CLI not found".to_string())?;
 
     let mut cmd = Command::new(&cli);
     cmd.arg("--no-auto-update")
@@ -909,17 +909,14 @@ pub fn run_aux_headless(
         .arg("low")
         .arg("--output-format")
         .arg("plain");
-    cmd.env("GROK_HOME", &grok_home);
-    crate::process_util::apply_no_window_std(&mut cmd);
-    if let Some(path_env) = crate::process_util::enriched_path_env() {
-        cmd.env("PATH", path_env);
-    }
+    cmd.env("SUPERCHARGE_HOME", &supercharge_home);
+    crate::process_util::apply_cli_env_std(&mut cmd);
     crate::proxy::apply_to_std_command(&mut cmd);
 
     tracing::info!(
         target: "models_aux",
         "aux headless start model={model_id} home={} prompt_chars={}",
-        grok_home.display(),
+        supercharge_home.display(),
         prompt.len()
     );
 
@@ -954,7 +951,7 @@ pub fn web_search_model_id() -> Option<String> {
     normalize_slot_value(&get_slot(&read_config_text(), "web_search"))
 }
 
-/// Host-side web search via independent `grok -p -m <aux>`.
+/// Host-side web search via independent `supercharge -p -m <aux>`.
 /// Does **not** use the live ACP session model.
 pub fn headless_web_search(query: &str) -> Result<String, String> {
     let q = query.trim();
@@ -1216,7 +1213,7 @@ pub struct HostVisionPrep {
 
 /// Full pipeline for a **final** agent prompt (after history bootstrap):
 /// - text-only main → strip all image `@path` (CLI must not inject image_url)
-/// - Host describes images: **prefer official ACP**, else `grok -p`, else Amux HTTP
+/// - Host describes images: **prefer official ACP**, else `supercharge -p`, else Amux HTTP
 ///
 /// Safe to call for every send; no-op when main is multimodal.
 #[allow(dead_code)]
@@ -1271,26 +1268,9 @@ pub async fn prepare_agent_prompt_for_main_detailed(
     let batch: Vec<String> = images.iter().take(MAX_VISION_IMAGES).cloned().collect();
     let mut blocks: Vec<String> = Vec::new();
 
-    // 1) Official ACP vision (isolated GROK_HOME + auth; stream → chip) — preferred.
-    if crate::official_aux::official_aux_available() {
-        let paths = batch.clone();
-        match crate::official_aux::vision_describe_async(&paths, None, progress).await {
-            Ok(text) => {
-                tracing::info!(
-                    target: "models_aux",
-                    "official ACP vision ok chars={}",
-                    text.len()
-                );
-                blocks.push(text);
-            }
-            Err(e) => {
-                tracing::warn!(target: "models_aux", "official vision failed: {e}");
-                blocks.push(format!("[official vision failed: {e}]"));
-            }
-        }
-    }
+    let _ = progress;
 
-    // 2) Fallback: HTTP vision via image_description slot (Amux/Yun/…).
+    // Describe images through the configured provider's image-description slot.
     if blocks.is_empty() || blocks.iter().all(|b| b.contains("failed")) {
         blocks.clear();
         let ep = resolve_vision_endpoint(&config, &list);
@@ -1324,7 +1304,7 @@ pub async fn prepare_agent_prompt_for_main_detailed(
                 .collect::<Vec<_>>()
                 .join("\n");
             blocks.push(format!(
-                "[Images not described — sign in with Grok (official aux) or set Model layers image_description. Paths:\n{list}]"
+                "[Images not described — configure a vision-capable image_description model. Paths:\n{list}]"
             ));
         }
     }
@@ -1346,7 +1326,7 @@ pub async fn prepare_agent_prompt_for_main_detailed(
         && !blocks
             .iter()
             .all(|b| b.contains("failed") || b.contains("not described") || b.contains("omitted"));
-    // Non-technical chip detail (UI must not show `grok -p` command lines).
+    // Non-technical chip detail (UI must not show `supercharge -p` command lines).
     let detail = if ok {
         format!("{} image(s)", batch.len().min(MAX_VISION_IMAGES))
     } else {
@@ -1387,7 +1367,7 @@ pub async fn prepare_agent_prompt_for_main_detailed(
     }
 }
 
-/// Replace `@/abs/image.ext` tokens with a non-attachable form so Grok Build
+/// Replace `@/abs/image.ext` tokens with a non-attachable form so Supercharge
 /// will not inject multimodal `image_url` blocks.
 pub fn neutralize_image_at_refs(text: &str) -> String {
     let (body, found) = strip_image_at_paths(text);
@@ -1704,8 +1684,8 @@ web_search = "amux"
         assert_eq!(slots.web_search, "amux");
         let mut env = Vec::new();
         for (slot, name) in [
-            ("image_description", "GROK_IMAGE_DESCRIPTION_MODEL"),
-            ("web_search", "GROK_WEB_SEARCH_MODEL"),
+            ("image_description", "SUPERCHARGE_IMAGE_DESCRIPTION_MODEL"),
+            ("web_search", "SUPERCHARGE_WEB_SEARCH_MODEL"),
         ] {
             if let Some(v) = normalize_slot_value(&get_slot(text, slot)) {
                 env.push((name, v));
@@ -1713,10 +1693,10 @@ web_search = "amux"
         }
         assert!(env
             .iter()
-            .any(|(k, v)| *k == "GROK_WEB_SEARCH_MODEL" && v == "amux"));
+            .any(|(k, v)| *k == "SUPERCHARGE_WEB_SEARCH_MODEL" && v == "amux"));
         assert!(env
             .iter()
-            .any(|(k, v)| *k == "GROK_IMAGE_DESCRIPTION_MODEL" && v == "amux"));
+            .any(|(k, v)| *k == "SUPERCHARGE_IMAGE_DESCRIPTION_MODEL" && v == "amux"));
     }
 
     #[test]

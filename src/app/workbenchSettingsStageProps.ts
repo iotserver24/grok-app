@@ -14,7 +14,6 @@ import type { Project, SessionRow } from "@/lib/app/sidebarModels";
 import type { CliInfoState } from "@/lib/cliVersionStatus";
 import type { CompactionModeId, CompactionDetailId } from "@/lib/compactionMode";
 import type { SettingsSectionId } from "@/components/SettingsPage";
-import type { AccountStatus, SavedAccount } from "@/lib/api/account";
 import type { AppDialog } from "@/lib/app/appDialogTypes";
 import type { ComposerPrefs } from "@/lib/api/settings";
 import type { ModelOption, PermissionPolicyId, ComposerPrefsScope } from "@/lib/grokCatalog";
@@ -42,13 +41,7 @@ export type TrayHandlers = {
 };
 
 export type WorkbenchSettingsStageProps = {
-  account: AccountStatus | null;
-  accountBusy: boolean;
-  accountHeatmapError: unknown;
-  accountLoading: boolean;
-  accountProbeError: unknown;
   acpServerAddr: string;
-  activeAccountId: string | null;
   activeProject: Project | null;
   agentCatalog: { name: string; source: string; }[];
   agentIdleMinutes: number;
@@ -74,7 +67,6 @@ export type WorkbenchSettingsStageProps = {
   availableModels: ModelOption[];
   backgroundWaitPolicy: string;
   backgroundWaitTimeoutSec: number;
-  cancelAccountLogin: () => Promise<void>;
   cliAgentSkewRepairing: boolean;
   cliInfo: CliInfoState;
   closeToTray: boolean;
@@ -90,7 +82,6 @@ export type WorkbenchSettingsStageProps = {
   goalOrchUiEnabled: boolean;
   handleClearAllSessionMutes: () => void;
   handleClearAllSessionUnread: () => void;
-  importChatTranscript: () => Promise<void>;
   includePartialMessages: boolean;
   keepTrayForSchedules: boolean;
   lastCliChecksumVerified: boolean | null;
@@ -98,7 +89,6 @@ export type WorkbenchSettingsStageProps = {
   launchAtLogin: boolean;
   locale: "id" | "en" | "de" | "es" | "fil" | "fr" | "it" | "ja" | "ko" | "pt-BR" | "ru" | "ta" | "uk" | "zh" | "zh-TW";
   localePreference: LocalePreference;
-  loginHint: string | null;
   manualCliPath: string;
   maxAgentTurns: number;
   maxConcurrentAgents: number;
@@ -135,14 +125,7 @@ export type WorkbenchSettingsStageProps = {
   welcomeMotionEnabled: boolean;
   setWelcomeMotionEnabled: Dispatch<SetStateAction<boolean>>;
   restoreSessions: (rows: SessionRow[]) => Promise<void>;
-  runAccountLogin: (method?: "oauth" | "device") => Promise<boolean>;
-  runAccountLogout: () => Promise<void>;
-  runAddAccount: () => Promise<void>;
-  runRemoveAccount: (id: string) => void;
-  runSaveAccount: () => Promise<void>;
-  runSwitchAccount: (id: string) => Promise<void>;
   sandboxProfile: "off" | "workspace" | "read-only" | "strict" | "devbox";
-  savedAccounts: SavedAccount[];
   session: SessionSnapshot;
   sessionDataMode: "shared" | "independent";
   sessions: SessionRow[];
@@ -218,8 +201,6 @@ export type WorkbenchSettingsStageProps = {
   setTwoPassCompactionEnabled: Dispatch<SetStateAction<boolean>>;
   setUseLeader: Dispatch<SetStateAction<boolean>>;
   setVoiceDictationAutoSend: Dispatch<SetStateAction<boolean>>;
-  setVoiceId: Dispatch<SetStateAction<string>>;
-  setVoiceKeepAgentsOnEnd: Dispatch<SetStateAction<boolean>>;
   setWinTaskbarOverlay: Dispatch<SetStateAction<boolean>>;
   setWindowAlwaysOnTop: Dispatch<SetStateAction<boolean>>;
   setWorkflowsEnabled: Dispatch<SetStateAction<boolean>>;
@@ -242,7 +223,6 @@ export type WorkbenchSettingsStageProps = {
   sttZhScript: string;
   subagentWorktreeSnapshotEnabled: boolean;
   subagentsEnabled: boolean;
-  submitAccountLoginCode: (code: string) => Promise<void>;
   theme: Theme;
   themePreference: ThemePreference;
   themeSchedule: ThemeScheduleConfig;
@@ -255,8 +235,6 @@ export type WorkbenchSettingsStageProps = {
   unreadSessionIds: Set<string>;
   useLeader: boolean;
   voiceDictationAutoSend: boolean;
-  voiceId: string;
-  voiceKeepAgentsOnEnd: boolean;
   wallpaperRecord: WallpaperRecord | null;
   wallpaperScrim: number;
   wallpaperBlur: number;

@@ -3,7 +3,7 @@
  * Per-block toggle still works independently; this only sets the initial state.
  */
 
-export const CODE_WRAP_PREF_KEY = "grok.codeWrapDefault";
+export const CODE_WRAP_PREF_KEY = "supercharge.codeWrapDefault";
 
 /** Dispatched on `window` after a successful save (detail = new pref). */
 export const CODE_WRAP_PREF_EVENT = "grok:codeWrapPref";

@@ -288,7 +288,7 @@ export type WorkflowRunHistoryFilter =
   | "validate"
   | "launch";
 
-export const WORKFLOW_RUN_HISTORY_STORAGE_KEY = "grok.workflowRunHistory";
+export const WORKFLOW_RUN_HISTORY_STORAGE_KEY = "supercharge.workflowRunHistory";
 export const WORKFLOW_RUN_HISTORY_MAX = 20;
 export const WORKFLOW_RUN_HISTORY_LOG_MAX = 280;
 export const WORKFLOW_RUN_HISTORY_NAME_MAX = 96;

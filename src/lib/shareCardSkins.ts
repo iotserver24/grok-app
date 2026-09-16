@@ -217,7 +217,7 @@ export function getShareCardSkin(
   return SKINS[DEFAULT_SHARE_CARD_SKIN];
 }
 
-const PREF_KEY = "grok-app.exportImage.skin";
+const PREF_KEY = "supercharge-app.exportImage.skin";
 
 /** Last-used skin for the export dialog (best-effort localStorage). */
 export function loadExportImageSkinPref(): ShareCardSkinId {

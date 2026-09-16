@@ -7,7 +7,6 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "@/test/jsdomStubs";
@@ -22,19 +21,6 @@ vi.mock("@/lib/imageLightboxFit", async () => {
   };
 });
 
-const fetchAlbumMedia = vi.hoisted(() =>
-  vi.fn(async () => ({
-    path: "H:\\wallpapers\\integration-video.mp4",
-    name: "integration-video.mp4",
-    mime: "video/mp4",
-    bytes: 1024,
-  })),
-);
-const xSearchState = vi.hoisted(() => ({
-  search: vi.fn(),
-  loadMore: vi.fn(),
-  cancel: vi.fn(async () => true),
-}));
 const providerState = vi.hoisted(() => ({
   busy: false,
   loadingMore: false,
@@ -54,61 +40,6 @@ const webItems = vi.hoisted(() => [
     sourceName: "photos.example.test",
   },
 ]);
-const albumState = vi.hoisted(() => {
-  const albumUrl =
-    "https://assets.grok.com/users/test/generated/fake/integration-video.mp4";
-  return {
-    items: [
-      {
-        id: "album-integration-video",
-        thumbUrl: albumUrl,
-        fullUrl: albumUrl,
-        kind: "video" as const,
-        source: "grok_album" as const,
-        width: 1280,
-        height: 720,
-      },
-    ],
-    open: vi.fn(),
-    sync: vi.fn(),
-    refresh: vi.fn(),
-    loadMore: vi.fn(),
-  };
-});
-
-vi.mock("@/hooks/useWallpaperXSearch", () => ({
-  useWallpaperXSearch: () => ({
-    busy: false,
-    loadingMore: false,
-    requestId: null,
-    stage: null,
-    progressiveItems: [],
-    search: xSearchState.search,
-    loadMore: xSearchState.loadMore,
-    cancel: xSearchState.cancel,
-  }),
-}));
-
-vi.mock("@/hooks/useWallpaperGrokAlbum", () => ({
-  useWallpaperGrokAlbum: () => ({
-    historyRevision: 0,
-    items: albumState.items,
-    status: "ready",
-    cachedCount: 1,
-    visibleCount: 1,
-    busy: false,
-    syncing: false,
-    loadingMore: false,
-    hasSynced: true,
-    errorCode: null,
-    canLoadMore: false,
-    open: albumState.open,
-    sync: albumState.sync,
-    refresh: albumState.refresh,
-    loadMore: albumState.loadMore,
-  }),
-}));
-
 vi.mock("@/hooks/useWallpaperProviderController", () => ({
   useWallpaperProviderController: (options: {
     setItems: (items: typeof webItems) => void;
@@ -130,10 +61,7 @@ vi.mock("@/hooks/useWallpaperProviderController", () => ({
 vi.mock("@/lib/api", () => ({
   isDesktopHost: () => true,
   isTauri: () => false,
-  settingsGet: vi.fn(async () => ({ wallpaperXSearchMode: "cli" })),
-  settingsSet: vi.fn(async () => ({})),
-  wallpaperFetchMedia: vi.fn(),
-  wallpaperLibraryRemember: vi.fn(async () => ({ source: "grok_album" })),
+  wallpaperLibraryRemember: vi.fn(async () => ({ source: "web" })),
   wallpaperLibraryLookup: vi.fn(async () => []),
   wallpaperRemoteFetchMedia: vi.fn(async () => ({
     path: "H:\\wallpapers\\web-integration.jpg",
@@ -148,17 +76,6 @@ vi.mock("@/lib/api", () => ({
   })),
   wallpaperRemoteCancelMediaRequests: vi.fn(async () => 0),
   wallpaperRemoteCancelAllMediaRequests: vi.fn(async () => 0),
-  wallpaperGrokAlbumFetchMedia: fetchAlbumMedia,
-  wallpaperGrokAlbumThumbnail: vi.fn(async () => ({
-    dataUrl: "data:image/jpeg;base64,YWJj",
-    width: 32,
-    height: 18,
-  })),
-  wallpaperGrokAlbumCancelRequests: vi.fn(async () => 0),
-  wallpaperGrokAlbumCancelAllRequests: vi.fn(async () => 0),
-  wallpaperImagine: vi.fn(),
-  wallpaperImaginePendingRecoveries: vi.fn(async () => []),
-  wallpaperImagineRecoverCatalog: vi.fn(),
   wallpaperLibraryList: vi.fn(),
   wallpaperLibraryPage: vi.fn(async () => ({
     items: [],
@@ -246,52 +163,6 @@ describe("WallpaperSourceModal image viewer integration", () => {
     expect(api.wallpaperRemoteCancelAllMediaRequests).not.toHaveBeenCalled();
   });
 
-  it("retries a failed original in the real preview without dropping its card", async () => {
-    setMediaEndpoint({
-      baseUrl: "http://127.0.0.1:19200",
-      token: "test-only",
-    });
-    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
-    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
-    fetchAlbumMedia.mockRejectedValueOnce(
-      new Error("download_failed: private diagnostic"),
-    );
-
-    render(
-      <ImageViewerProvider locale="en">
-        <WallpaperSourceModal
-          open
-          initialTab="grok_album"
-          t={(key) =>
-            key === "settings.wallpaperSource.err.download_failed"
-              ? "Download failed"
-              : key
-          }
-          onClose={vi.fn()}
-          onPickFile={vi.fn()}
-        />
-      </ImageViewerProvider>,
-    );
-
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "settings.wallpaperSource.openPreview",
-      }),
-    );
-    const retry = await screen.findByRole("button", { name: "Retry" });
-    const portal = document.querySelector<HTMLElement>(".yarl__portal");
-    expect(portal).not.toBeNull();
-    expect(within(portal!).getByRole("status").textContent).toContain(
-      "Download failed",
-    );
-    expect(document.body.textContent).not.toContain("private diagnostic");
-    expect(document.querySelector(".wallpaper-masonry__preview")).not.toBeNull();
-
-    fireEvent.click(retry);
-    await waitFor(() => expect(portal?.querySelector("video")).not.toBeNull());
-    expect(fetchAlbumMedia).toHaveBeenCalledTimes(2);
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
-  });
 
   it("opens the real preview while a provider page is loading", async () => {
     const props = {

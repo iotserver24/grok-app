@@ -37,19 +37,11 @@ vi.mock("@/lib/api", () => ({
   listenWallpaperRemoteSearchProgress: vi.fn(async () => () => {}),
   listenWallpaperRemoteSearchBatch: vi.fn(async () => () => {}),
   wallpaperRemoteCancelMediaRequests: vi.fn(async () => 0),
-  wallpaperGrokAlbumCancelRequests: vi.fn(async () => 0),
-  wallpaperGrokAlbumCancelAllRequests: vi.fn(async () => 0),
+  wallpaperRemoteCancelAllMediaRequests: vi.fn(async () => 0),
   isDesktopHost: () => true,
   isTauri: () => false,
-  settingsGet: vi.fn(async () => ({ wallpaperXSearchMode: "responses_preview" })),
-  settingsSet: vi.fn(async () => ({})),
-  wallpaperXSearch: mocks.search, wallpaperXSearchMore: mocks.more, wallpaperXSearchCancel: mocks.cancel,
-  listenWallpaperXSearchProgress: vi.fn(async () => () => {}),
-  listenWallpaperXSearchBatch: vi.fn(async () => () => {}),
-  wallpaperFetchMedia: vi.fn(async () => ({ path: "C:/cache/sky.jpg", mime: "image/jpeg", name: "sky.jpg" })),
-  wallpaperImagine: vi.fn(), wallpaperLibraryList: vi.fn(), wallpaperLibraryDelete: vi.fn(),
-  wallpaperImaginePendingRecoveries: vi.fn(async () => []),
-  wallpaperImagineRecoverCatalog: vi.fn(),
+  wallpaperLibraryList: vi.fn(),
+  wallpaperLibraryDelete: vi.fn(),
   wallpaperLibraryLookup: mocks.libraryLookup,
   wallpaperLibraryRemember: mocks.libraryRemember,
   openExternalUrl: mocks.openExternal,
@@ -433,7 +425,7 @@ it("keeps a provider page running after switching tabs and restores it", async (
   await initial();
   fireEvent.click(screen.getByRole("button", { name: "settings.wallpaperSource.loadMore" }));
   await waitFor(() => expect(mocks.more).toHaveBeenCalledTimes(1));
-  fireEvent.click(screen.getByRole("tab", { name: "settings.wallpaperFromX" }));
+  fireEvent.click(screen.getByRole("tab", { name: "settings.wallpaperWeb" }));
   finish(result(["late"], false));
   await waitFor(() => expect(cards()).toHaveLength(0));
   fireEvent.click(

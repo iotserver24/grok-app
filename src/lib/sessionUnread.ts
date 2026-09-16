@@ -6,7 +6,7 @@
  * get an unread dot when a background turn completes.
  */
 
-export const SESSION_UNREAD_STORAGE_KEY = "grok.sessionUnread";
+export const SESSION_UNREAD_STORAGE_KEY = "supercharge.sessionUnread";
 
 /** Fired on `window` after a successful save (detail = string[] of unread ids). */
 export const SESSION_UNREAD_CHANGE_EVENT = "grok-session-unread-change";

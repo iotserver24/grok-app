@@ -1,4 +1,4 @@
-//! Headless probe for Grok Build `--output-format streaming-messages-json`
+//! Headless probe for Supercharge `--output-format streaming-messages-json`
 //! (CLI 0.2.117+).
 //!
 //! Spawns a short always-approve turn, writes NDJSON to a temp file, and

@@ -1,24 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
-  AI98PRO_MODELS,
-  AMUX_MODELS,
   DEEPSEEK_EFFORTS,
   DEEPSEEK_MODELS,
   GROK_CHANNEL_EFFORTS,
-  GROK_OFFICIAL_EFFORTS,
   OPENROUTER_EFFORTS,
   OPENROUTER_MODELS,
   ORCAROUTER_MODELS,
   PROVIDER_PRESETS,
   VOLCANO_ARK_MODELS,
-  YUN_API_MODELS,
   ZHIPU_ENDPOINTS,
   ZHIPU_MODELS,
-  alignGrokPresetEfforts,
   applyPresetEndpoint,
   defaultCustomChannelEfforts,
   findProviderPreset,
-  isLegacyGrokChannelEffortIds,
   matchPresetEndpoint,
   resolveMatchedProviderPreset,
   resolveProviderApiKeyUrl,
@@ -45,31 +39,6 @@ describe("providerPresets", () => {
     expect(PROVIDER_PRESETS.some((p) => p.id === "deepseek")).toBe(true);
   });
 
-  it("ships Amux with grok-4.6 + grok-4.5 and Grok efforts", () => {
-    const amux = findProviderPreset("amux");
-    expect(amux).toBeDefined();
-    expect(amux!.baseUrl).toBe("https://api.amux.ai/v1");
-    expect(amux!.apiBackend).toBe("responses");
-    expect(AMUX_MODELS).toEqual([
-      { id: "grok-4.6", name: "Grok 4.6", supportsVision: true },
-      { id: "grok-4.5", name: "Grok 4.5", supportsVision: true },
-    ]);
-    expect(amux!.models).toEqual(AMUX_MODELS);
-    expect(amux!.efforts.map((e) => e.id)).toEqual([
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-    ]);
-    expect(amux!.efforts.map((e) => e.name)).toEqual([
-      "Low",
-      "Medium",
-      "High",
-      "Extra high",
-    ]);
-    expect(amux!.efforts.find((e) => e.isDefault)?.id).toBe("xhigh");
-    expect(amux!.apiKeyUrl).toContain("api.amux.ai/register");
-  });
 
   it("ships OpenCode Go with chat_completions for DeepSeek-class models", () => {
     const go = findProviderPreset("opencode-go");
@@ -80,22 +49,6 @@ describe("providerPresets", () => {
     expect(go!.brandId).toBe("opencode-go");
   });
 
-  it("ships Yun API with grok-4.6 + grok-4.5 and yunyi register link", () => {
-    const yun = findProviderPreset("yun-api");
-    expect(yun).toBeDefined();
-    expect(yun!.baseUrl).toBe("https://api.yunyi.ai/v1");
-    expect(YUN_API_MODELS).toEqual([
-      { id: "grok-4.6", name: "Grok 4.6", supportsVision: true },
-      { id: "grok-4.5", name: "Grok 4.5", supportsVision: true },
-    ]);
-    expect(yun!.apiKeyUrl).toBe(
-      "https://api.yunyi.ai/register/?aff_code=W0iw",
-    );
-    expect(yun!.efforts.map((e) => e.id)).toEqual(
-      GROK_OFFICIAL_EFFORTS.map((e) => e.id),
-    );
-    expect(yun!.efforts.find((e) => e.isDefault)?.id).toBe("xhigh");
-  });
 
   it("ships OpenRouter with GLM-5.3 Flash, chat_completions, vision, and 1M context", () => {
     const p = findProviderPreset("openrouter");
@@ -188,12 +141,6 @@ describe("providerPresets", () => {
     expect(
       resolveProviderApiKeyUrl({ providerId: "deepseek" }),
     ).toBe("https://platform.deepseek.com/");
-    expect(
-      resolveProviderApiKeyUrl({ baseUrl: "https://api.amux.ai/v1" }),
-    ).toContain("amux.ai/register");
-    expect(
-      resolveProviderApiKeyUrl({ baseUrl: "https://api.yunyi.ai/v1" }),
-    ).toContain("aff_code=W0iw");
     expect(resolveProviderApiKeyUrl({ baseUrl: "https://example.com" })).toBe(
       null,
     );
@@ -217,37 +164,6 @@ describe("providerPresets", () => {
     expect(ark!.efforts.find((e) => e.isDefault)?.id).toBe("medium");
   });
 
-  it("ships AI98PRO with short id, Grok 4.6/4.5, Responses, and vision", () => {
-    const p = findProviderPreset("ai98pro");
-    expect(p).toBeDefined();
-    expect(findProviderPreset("AI98PRO")?.id).toBe("ai98pro");
-    expect(p!.name).toBe("AI98PRO");
-    expect(p!.suggestedId).toBe("AI98PRO");
-    expect(p!.baseUrl).toBe("https://ai98pro.xyz/v1");
-    expect(p!.apiBackend).toBe("responses");
-    expect(p!.supportsVision).toBe(true);
-    expect(p!.brandId).toBeUndefined();
-    expect(AI98PRO_MODELS).toEqual([
-      { id: "grok-4.6", name: "Grok 4.6", supportsVision: true },
-      { id: "grok-4.5", name: "Grok 4.5", supportsVision: true },
-    ]);
-    expect(p!.models).toEqual(AI98PRO_MODELS);
-    expect(p!.efforts.map((e) => e.id)).toEqual(
-      GROK_OFFICIAL_EFFORTS.map((e) => e.id),
-    );
-    expect(p!.efforts.find((e) => e.isDefault)?.id).toBe("xhigh");
-    expect(p!.apiKeyUrl).toBe("https://ai98pro.xyz");
-    expect(
-      resolveProviderApiKeyUrl({
-        providerId: "ai98pro-----1072183582",
-      }),
-    ).toBe("https://ai98pro.xyz");
-    expect(
-      resolveProviderApiKeyUrl({
-        baseUrl: "https://ai98pro.xyz/v1",
-      }),
-    ).toBe("https://ai98pro.xyz");
-  });
 
   it("resolves brand logos for DeepSeek/OpenRouter/Amux/OpenCode Go/Volcano Ark/Zhipu", () => {
     expect(resolveProviderBrandId({ providerId: "deepseek" })).toBe(
@@ -261,9 +177,6 @@ describe("providerPresets", () => {
         baseUrl: "https://openrouter.ai/api/v1",
       }),
     ).toBe("openrouter");
-    expect(resolveProviderBrandId({ baseUrl: "https://api.amux.ai/v1" })).toBe(
-      "amux",
-    );
     expect(
       resolveProviderBrandId({ providerId: "opencode-go" }),
     ).toBe("opencode-go");
@@ -361,59 +274,4 @@ describe("providerPresets", () => {
     ]);
   });
 
-  it("rewrites legacy Amux/Yun max ladders to official xhigh", () => {
-    expect(
-      isLegacyGrokChannelEffortIds(["low", "medium", "high", "max"]),
-    ).toBe(true);
-    expect(
-      isLegacyGrokChannelEffortIds(["low", "medium", "high", "xhigh"]),
-    ).toBe(false);
-    const aligned = alignGrokPresetEfforts({
-      providerId: "amux",
-      efforts: [
-        { id: "low", name: "low" },
-        { id: "medium", name: "medium", isDefault: true },
-        { id: "high", name: "high" },
-        { id: "max", name: "max" },
-      ],
-    });
-    expect(aligned?.map((e) => e.id)).toEqual([
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-    ]);
-    expect(aligned?.find((e) => e.isDefault)?.id).toBe("xhigh");
-    expect(
-      alignGrokPresetEfforts({
-        providerId: "deepseek",
-        efforts: [{ id: "max", name: "max" }],
-      }),
-    ).toBeNull();
-    expect(
-      alignGrokPresetEfforts({
-        providerId: "ai98pro-----1072183582",
-        efforts: [
-          { id: "low", name: "low" },
-          { id: "medium", name: "medium", isDefault: true },
-          { id: "high", name: "high" },
-          { id: "max", name: "max" },
-        ],
-      })?.map((e) => e.id),
-    ).toEqual(["low", "medium", "high", "xhigh"]);
-    expect(
-      alignGrokPresetEfforts({
-        providerId: "yun-api",
-        efforts: [
-          { id: "low", name: "Low" },
-          { id: "custom", name: "Custom" },
-          { id: "max", name: "Turbo" },
-        ],
-      })?.map((e) => ({ id: e.id, name: e.name })),
-    ).toEqual([
-      { id: "low", name: "Low" },
-      { id: "custom", name: "Custom" },
-      { id: "xhigh", name: "Turbo" },
-    ]);
-  });
 });

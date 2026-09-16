@@ -348,7 +348,7 @@ export function buildSmartShareSummary(input: {
     stripMarkdownLite(input.title) ||
       headings[0] ||
       stripMarkdownLite(parts[0] || "").slice(0, MAX_HEADLINE) ||
-      "Grok share",
+      "Supercharge share",
     MAX_HEADLINE,
   );
 

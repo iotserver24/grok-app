@@ -1,4 +1,4 @@
-//! Import custom Grok Build providers from **CC Switch** (farion1231/cc-switch).
+//! Import custom Supercharge providers from **CC Switch** (farion1231/cc-switch).
 //!
 //! CC Switch stores providers in SQLite (`app_type = 'grokbuild'`) under
 //! `{home}/.cc-switch/` (all platforms). Optional custom root lives in Tauri
@@ -49,7 +49,7 @@ pub struct CcSwitchProviderPreview {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub category: Option<String>,
     pub is_current: bool,
-    /// Suggested Grok App provider id (slug).
+    /// Suggested Supercharge App provider id (slug).
     pub suggested_id: String,
     pub model: String,
     pub base_url: String,
@@ -612,7 +612,7 @@ fn parse_settings_config(settings_json: &str, fallback_name: &str) -> Result<Par
     parse_grok_toml(config, fallback_name)
 }
 
-/// Minimal TOML extract for Grok Build model tables (no full toml crate).
+/// Minimal TOML extract for Supercharge model tables (no full toml crate).
 fn parse_grok_toml(config: &str, fallback_name: &str) -> Result<ParsedModel, String> {
     if config.trim().is_empty() {
         return Err("empty config.toml".into());
@@ -923,7 +923,7 @@ app_provider_mode = "grok_build_proxy"
     }
 
     #[test]
-    fn cc_switch_import_auto_promotes_live_backend_search_capability() {
+    fn cc_switch_import_keeps_generic_when_backend_claims_search_capability() {
         let parsed = test_parsed_model(None);
         let mode = resolve_import_provider_mode_with(&parsed, |base, key| {
             assert_eq!(base, "https://relay.example/v1");
@@ -939,7 +939,7 @@ app_provider_mode = "grok_build_proxy"
             })
         })
         .expect("classify");
-        assert_eq!(mode, providers::PROVIDER_MODE_GROK_BUILD_PROXY);
+        assert_eq!(mode, providers::PROVIDER_MODE_GENERIC);
     }
 
     #[test]
@@ -969,11 +969,12 @@ app_provider_mode = "grok_build_proxy"
         .expect("generic");
         assert_eq!(generic, providers::PROVIDER_MODE_GENERIC);
 
-        let explicit_native = test_parsed_model(Some(providers::PROVIDER_MODE_GROK_BUILD_PROXY));
-        let error =
-            resolve_import_provider_mode_with(&explicit_native, |_, _| Err("offline".into()))
-                .expect_err("explicit native must fail closed");
-        assert!(error.contains("capability check failed"));
+        let explicit_legacy = test_parsed_model(Some(providers::PROVIDER_MODE_GROK_BUILD_PROXY));
+        let legacy = resolve_import_provider_mode_with(&explicit_legacy, |_, _| {
+            panic!("legacy mode must normalize before probing")
+        })
+        .expect("legacy mode");
+        assert_eq!(legacy, providers::PROVIDER_MODE_GENERIC);
     }
 
     #[test]
@@ -1079,14 +1080,14 @@ app_provider_mode = "grok_build_proxy"
     }
 
     #[test]
-    fn import_roundtrip_writes_resolved_native_mode() {
+    fn import_roundtrip_normalizes_legacy_native_mode_to_generic() {
         let _lock = crate::paths::APP_HOME_ENV_LOCK
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         let app_home = tempfile_dir();
         let cc_home = tempfile_dir();
         let _restore = RestoreEnv::set(&[
-            ("GROK_APP_HOME", app_home.to_string_lossy().as_ref()),
+            ("SUPERCHARGE_APP_HOME", app_home.to_string_lossy().as_ref()),
             (ENV_DIR, cc_home.to_string_lossy().as_ref()),
         ]);
 
@@ -1133,7 +1134,7 @@ app_provider_mode = "grok_build_proxy"
         assert!(result.failed.is_empty());
 
         let written = fs::read_to_string(app_home.join("agent-home/config.toml")).expect("config");
-        assert!(written.contains("app_provider_mode = \"grok_build_proxy\""));
+        assert!(written.contains("app_provider_mode = \"generic\""));
         assert!(written.contains("model = \"grok-4.6\""));
 
         let _ = fs::remove_dir_all(&app_home);

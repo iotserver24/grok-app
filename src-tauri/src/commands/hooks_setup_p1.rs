@@ -28,19 +28,19 @@ pub async fn hooks_ensure_dir(
 
 // ── Hooks manager (list / reveal / open folder) ─────────────────────────────
 
-/// List hook files under `~/.grok/hooks` and optionally `<project>/.grok/hooks`.
+/// List hook files under the configured user and project hook directories.
 #[tauri::command]
-pub async fn hooks_list(project_path: Option<String>) -> Result<crate::hooks::HooksListResult, String> {
+pub async fn hooks_list(
+    project_path: Option<String>,
+) -> Result<crate::hooks::HooksListResult, String> {
     let path = project_path
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string());
-    tauri::async_runtime::spawn_blocking(move || {
-        crate::hooks::collect_hooks_list(path.as_deref())
-    })
-    .await
-    .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || crate::hooks::collect_hooks_list(path.as_deref()))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // from PR #78
@@ -68,8 +68,10 @@ pub async fn hooks_open_dir(
         } else {
             let d = match scope_for_block.trim() {
                 "user" | "" => crate::hooks::user_hooks_dir(),
-                "project" => crate::hooks::project_hooks_dir(project_for_block.as_deref().unwrap_or(""))
-                    .ok_or_else(|| "project path required for project hooks".to_string())?,
+                "project" => {
+                    crate::hooks::project_hooks_dir(project_for_block.as_deref().unwrap_or(""))
+                        .ok_or_else(|| "project path required for project hooks".to_string())?
+                }
                 other => return Err(format!("unknown hooks scope: {other}")),
             };
             if !d.exists() {
@@ -131,8 +133,7 @@ pub async fn hooks_try_run(
 
 fn is_agent_def_file(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
-    !name.starts_with('.')
-        && (lower.ends_with(".md") || lower.ends_with(".markdown"))
+    !name.starts_with('.') && (lower.ends_with(".md") || lower.ends_with(".markdown"))
 }
 
 // from PR #77
@@ -140,9 +141,7 @@ fn is_agent_def_file(name: &str) -> bool {
 fn is_persona_def_file(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     !name.starts_with('.')
-        && (lower.ends_with(".toml")
-            || lower.ends_with(".md")
-            || lower.ends_with(".markdown"))
+        && (lower.ends_with(".toml") || lower.ends_with(".md") || lower.ends_with(".markdown"))
 }
 
 // from PR #88
@@ -236,12 +235,7 @@ pub async fn mcp_add(
     let args = args.unwrap_or_default();
     let env_owned = env;
     let def = tauri::async_runtime::spawn_blocking(move || {
-        crate::extensions::add_mcp_stdio(
-            &name,
-            &command,
-            &args,
-            env_owned.as_ref(),
-        )
+        crate::extensions::add_mcp_stdio(&name, &command, &args, env_owned.as_ref())
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -262,7 +256,9 @@ pub async fn mcp_add(
 /// Start interactive MCP OAuth (PKCE + loopback). Returns authorize URL for
 /// the UI to open; host waits for callback and persists Bearer token.
 #[tauri::command]
-pub async fn mcp_oauth_start(name: String) -> Result<crate::mcp_oauth::McpOauthStartResult, String> {
+pub async fn mcp_oauth_start(
+    name: String,
+) -> Result<crate::mcp_oauth::McpOauthStartResult, String> {
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err("MCP server name required".into());
@@ -284,14 +280,12 @@ pub async fn mcp_oauth_status(
     Ok(crate::mcp_oauth::mcp_oauth_status(&name))
 }
 
-/// Run `grok mcp doctor --json` (optional server name) under the active GROK_HOME.
+/// Run `supercharge mcp doctor --json` (optional server name) under the active SUPERCHARGE_HOME.
 #[tauri::command]
 pub async fn mcp_doctor(
     name: Option<String>,
 ) -> Result<crate::extensions::McpDoctorReport, String> {
-    let name = name
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
+    let name = name.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     tauri::async_runtime::spawn_blocking(move || run_mcp_doctor(name.as_deref()))
         .await
         .map_err(|e| e.to_string())?
@@ -339,10 +333,10 @@ pub fn normalize_worktree_path_key(raw: &str) -> String {
 
 // from PR #84
 
-/// Read compact permission rules from the active GROK_HOME config.toml.
+/// Read compact permission rules from the active SUPERCHARGE_HOME config.toml.
 #[tauri::command]
-pub async fn permission_rules_get(
-) -> Result<crate::permission_rules::PermissionRulesResult, String> {
+pub async fn permission_rules_get() -> Result<crate::permission_rules::PermissionRulesResult, String>
+{
     tauri::async_runtime::spawn_blocking(crate::permission_rules::load_permission_rules)
         .await
         .map_err(|e| e.to_string())?
@@ -370,7 +364,7 @@ pub async fn permission_rules_set(
     .await
     .map_err(|e| e.to_string())??;
 
-    // Grok Build reads rules at session start — soft-respawn so the next turn
+    // Supercharge reads rules at session start — soft-respawn so the next turn
     // reloads config without a full disconnect toast.
     mgr.soft_respawn(&app).await;
     Ok(result)
@@ -378,19 +372,19 @@ pub async fn permission_rules_set(
 
 // from PR #82
 
-/// GROK_HOME the live Grok Build process actually gets (Settings session
+/// `SUPERCHARGE_HOME` the live Supercharge process gets (Settings session
 /// data mode, plus custom-route override). Same helper as ACP spawn.
-fn live_instruction_grok_home() -> std::path::PathBuf {
+fn live_instruction_supercharge_home() -> std::path::PathBuf {
     let mode = crate::store::load_settings().session_data_mode;
     let custom_route = matches!(
         crate::providers::active_route(),
         crate::providers::ActiveRoute::Custom { .. }
     );
-    crate::paths::resolve_inference_grok_home(&mode, custom_route)
+    crate::paths::resolve_inference_supercharge_home(&mode, custom_route)
 }
 
 /// Create root `AGENTS.md` stub when missing (idempotent).
-/// `scope`: `project` (default) | `user_agents` | `grok_home`.
+/// `scope`: `project` (default) | `user_agents` | `grok_home` (legacy IPC value for SUPERCHARGE_HOME).
 #[tauri::command]
 pub async fn project_rules_ensure_template(
     project_path: String,
@@ -403,7 +397,7 @@ pub async fn project_rules_ensure_template(
             crate::project_rules::ensure_home_agents_template(&home)
         }
         "grok_home" => {
-            crate::project_rules::ensure_home_agents_template(&live_instruction_grok_home())
+            crate::project_rules::ensure_home_agents_template(&live_instruction_supercharge_home())
         }
         other => Err(format!("unknown rules scope: {other}")),
     }
@@ -411,19 +405,19 @@ pub async fn project_rules_ensure_template(
 
 // from PR #82
 
-/// List project + user-level rule files (AGENTS.md, CLAUDE.md, `.grok/rules*`,
-/// `~/.agents`, live GROK_HOME).
+/// List project + user-level rule files (AGENTS.md, CLAUDE.md, `.supercharge/rules*`,
+/// `~/.agents`, live SUPERCHARGE_HOME).
 /// IPC arg is `projectPath` (camelCase) → `project_path`.
 #[tauri::command]
 pub async fn project_rules_list(
     project_path: String,
 ) -> Result<crate::project_rules::ProjectRulesListResult, String> {
     let user_agents = crate::process_util::user_home().join(".agents");
-    let grok_home = live_instruction_grok_home();
+    let supercharge_home = live_instruction_supercharge_home();
     crate::project_rules::list_project_rules_with_homes(
         &project_path,
         Some(user_agents.as_path()),
-        Some(grok_home.as_path()),
+        Some(supercharge_home.as_path()),
     )
 }
 
@@ -484,10 +478,7 @@ pub fn refuse_remove_main_worktree(
     if target.is_empty() {
         return Err("empty worktree path".into());
     }
-    let main = listed
-        .iter()
-        .find(|w| w.is_main)
-        .or_else(|| listed.first());
+    let main = listed.iter().find(|w| w.is_main).or_else(|| listed.first());
     if let Some(m) = main {
         if worktree_paths_equal(&m.path, &target) {
             return Err("refusing to remove the main worktree".into());
@@ -498,13 +489,13 @@ pub fn refuse_remove_main_worktree(
 
 // from PR #68
 
-/// Invoke CLI doctor with GROK_HOME matching session_data_mode.
+/// Invoke CLI doctor with `SUPERCHARGE_HOME` matching session_data_mode.
 ///
-/// Runs `grok mcp doctor --json [NAME]` with a hard timeout. Errors are
+/// Runs `supercharge mcp doctor --json [NAME]` with a hard timeout. Errors are
 /// redacted/truncated so secrets never leave the host. Returns a structured
 /// report (JSON-serializable) — never invents servers.
 ///
-/// Independent mode: HTTP MCP often exists only in `~/.grok/config.toml` (CLI)
+/// Independent mode: HTTP MCP often exists only in `~/.supercharge/config.toml` (CLI)
 /// while doctor uses App `agent-home`. Mirror missing user HTTP servers into
 /// agent-home first so focused doctor (e.g. `chatcut`) does not false-report
 /// "MCP server not found".
@@ -512,7 +503,7 @@ fn run_mcp_doctor(name: Option<&str>) -> Result<crate::extensions::McpDoctorRepo
     let settings = store::load_settings();
     let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
     let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return Err("Grok Build CLI not found".into());
+        return Err("Supercharge CLI not found".into());
     };
     // Sync user-scoped HTTP MCP into agent-home before doctor (independent mode).
     let mirrored =
@@ -520,7 +511,8 @@ fn run_mcp_doctor(name: Option<&str>) -> Result<crate::extensions::McpDoctorRepo
     if mirrored > 0 {
         tracing::info!("mcp doctor: mirrored {mirrored} HTTP MCP server(s) into agent-home");
     }
-    let grok_home = crate::paths::resolve_agent_grok_home(&settings.session_data_mode);
+    let supercharge_home =
+        crate::paths::resolve_agent_supercharge_home(&settings.session_data_mode);
 
     let mut args: Vec<String> = vec!["mcp".into(), "doctor".into(), "--json".into()];
     if let Some(n) = name {
@@ -539,11 +531,8 @@ fn run_mcp_doctor(name: Option<&str>) -> Result<crate::extensions::McpDoctorRepo
     std::thread::spawn(move || {
         let mut cmd = std::process::Command::new(&cli_path);
         cmd.args(&args);
-        cmd.env("GROK_HOME", &grok_home);
-        crate::process_util::apply_no_window_std(&mut cmd);
-        if let Some(path_env) = crate::process_util::enriched_path_env() {
-            cmd.env("PATH", path_env);
-        }
+        cmd.env("SUPERCHARGE_HOME", &supercharge_home);
+        crate::process_util::apply_cli_env_std(&mut cmd);
         crate::proxy::apply_to_std_command(&mut cmd);
         let _ = tx.send(cmd.output());
     });
@@ -572,11 +561,11 @@ fn run_mcp_doctor(name: Option<&str>) -> Result<crate::extensions::McpDoctorRepo
             if lower.contains("not found") && lower.contains("mcp server") {
                 let focus = name.unwrap_or("").trim();
                 let label = if focus.is_empty() {
-                    "MCP server not found under active GROK_HOME".to_string()
+                    "MCP server not found under active SUPERCHARGE_HOME".to_string()
                 } else {
                     format!(
                         "MCP server '{focus}' not found under active agent home. \
-                         It may only exist in ~/.grok (terminal CLI). \
+                         It may only exist in ~/.supercharge (terminal CLI). \
                          Re-add in App or re-run doctor after sync."
                     )
                 };
@@ -602,7 +591,7 @@ fn run_mcp_doctor(name: Option<&str>) -> Result<crate::extensions::McpDoctorRepo
                                 detail: Some(label.clone()),
                                 hint: Some(
                                     "Independent mode uses App agent-home; add HTTP MCP there \
-                                     or re-run doctor (auto-mirrors from ~/.grok)."
+                                     or re-run doctor (auto-mirrors from ~/.supercharge)."
                                         .into(),
                                 ),
                             }],
@@ -615,11 +604,11 @@ fn run_mcp_doctor(name: Option<&str>) -> Result<crate::extensions::McpDoctorRepo
             Ok(crate::extensions::parse_mcp_doctor_json(&blob))
         }
         Ok(Err(e)) => Err(format!(
-            "Failed to run grok mcp doctor: {}",
+            "Failed to run Supercharge mcp doctor: {}",
             redact_doctor_fix_output(&e.to_string(), 240)
         )),
         Err(_) => Err(format!(
-            "grok mcp doctor timed out after {MCP_DOCTOR_TIMEOUT_SECS}s"
+            "Supercharge mcp doctor timed out after {MCP_DOCTOR_TIMEOUT_SECS}s"
         )),
     }
 }
@@ -680,9 +669,7 @@ pub fn sanitize_worktree_name(raw: &str) -> Result<String, String> {
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-');
     if !ok {
-        return Err(
-            "worktree name may only contain letters, digits, '.', '_' and '-'".into(),
-        );
+        return Err("worktree name may only contain letters, digits, '.', '_' and '-'".into());
     }
     if name.starts_with('-') {
         return Err("worktree name must not start with '-'".into());
@@ -856,7 +843,7 @@ fn setup_error_kind(msg: &str) -> &'static str {
         || m.contains("team sign-in")
         || m.contains("team login")
         || m.contains("sign in with a team")
-        || m.contains("export grok_deployment_key")
+        || m.contains("export supercharge_deployment_key")
     {
         return "missing_auth";
     }
@@ -897,7 +884,7 @@ pub async fn managed_setup_status() -> Result<crate::managed_setup::ManagedSetup
 
 // from PR #79
 
-/// `grok setup` — fetch and install managed configuration into ~/.grok.
+/// `supercharge setup` — fetch and install managed configuration into ~/.supercharge.
 /// Soft-respawns the agent on success so new policy is picked up.
 /// Always returns Ok; failures surface as `{ ok: false, error, errorKind }`.
 #[tauri::command]
@@ -906,7 +893,7 @@ pub async fn setup_install(
     mgr: State<'_, Arc<SessionManager>>,
 ) -> Result<serde_json::Value, String> {
     let result = tauri::async_runtime::spawn_blocking(|| {
-        run_grok_cli_args(&["setup"], SETUP_CMD_TIMEOUT_SECS)
+        run_supercharge_cli_args(&["setup"], SETUP_CMD_TIMEOUT_SECS)
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -965,12 +952,12 @@ pub async fn setup_install(
 
 // from PR #79
 
-/// `grok setup --json` — fetch managed config preview without writing to ~/.grok.
+/// `supercharge setup --json` — fetch managed config preview without writing to ~/.supercharge.
 /// Always returns Ok; failures surface as `{ ok: false, error, errorKind }`.
 #[tauri::command]
 pub async fn setup_preview() -> Result<serde_json::Value, String> {
     let result = tauri::async_runtime::spawn_blocking(|| {
-        run_grok_cli_args(&["setup", "--json"], SETUP_CMD_TIMEOUT_SECS)
+        run_supercharge_cli_args(&["setup", "--json"], SETUP_CMD_TIMEOUT_SECS)
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -991,11 +978,8 @@ pub async fn setup_preview() -> Result<serde_json::Value, String> {
     };
 
     if !ok {
-        let error = setup_cli_failure_message(
-            &stdout,
-            &stderr,
-            "Could not fetch managed configuration",
-        );
+        let error =
+            setup_cli_failure_message(&stdout, &stderr, "Could not fetch managed configuration");
         let kind = setup_error_kind(&error);
         return Ok(serde_json::json!({
             "ok": false,

@@ -2,7 +2,7 @@
 //!
 //! `grok inspect` can still list `~/.claude` / `~/.cursor` skills after the
 //! user sets `[compat.claude] skills = false` (or the App overlay is off).
-//! Filter the App catalog so it matches Grok Build's live discovery.
+//! Filter the App catalog so it matches Supercharge's live discovery.
 
 use serde::{Deserialize, Serialize};
 

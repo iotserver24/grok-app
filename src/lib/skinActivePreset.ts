@@ -5,7 +5,7 @@
 import { parseWallpaperScrim, type ThemeSkinId, type WallpaperRecord } from "./themeSkin";
 import type { SkinPresetListItem } from "./api/skin";
 
-export const SKIN_ACTIVE_PRESET_KEY = "grok-app.skin-preset-active";
+export const SKIN_ACTIVE_PRESET_KEY = "supercharge-app.skin-preset-active";
 export const SKIN_LIBRARY_CHANGED_EVENT = "grok-app.skin-library-changed";
 
 export function loadActivePresetId(

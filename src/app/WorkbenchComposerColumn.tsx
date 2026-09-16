@@ -4,11 +4,9 @@
  */
 import type { Dispatch, MouseEvent as ReactMouseEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject, SetStateAction } from "react";
 import { createT } from "@/i18n";
-import type { AccountStatus } from "@/lib/api/account";
 import type { Project, SessionRow } from "@/lib/app/sidebarModels";
 import type { ComposerAtFileEntry } from "@/components/ComposerAtPanel";
 import type { ComposerPlusEntry } from "@/components/ComposerPlusPanel";
-import type { SuperGrokBrandKind } from "@/components/SuperGrokMark";
 import type { PermissionPayload, AskUserPayload, SessionSnapshot } from "@/lib/session";
 import type { PermissionPolicyId, ModelOption, EffortOption } from "@/lib/grokCatalog";
 import type { SlashItem, SlashKindFilter, SlashKindCounts } from "@/lib/slashCatalog";
@@ -40,7 +38,7 @@ import { ComposerRemoteMenu } from "@/components/ComposerRemoteMenu";
 import { ComposerWorktreeMenu } from "@/components/ComposerWorktreeMenu";
 import { AskUserBar } from "@/components/AskUserBar";
 import { PermissionCountdown } from "@/components/PermissionCountdown";
-import { SuperGrokMark } from "@/components/SuperGrokMark";
+import { GrokLogo } from "@/components/GrokLogo";
 import { IconFileDiff, IconGitBranch } from "@/components/icons";
 import { Tip } from "@/components/ui/tooltip";
 import { mapProjectsList, projectDisplayName } from "@/lib/app/sidebarModels";
@@ -62,7 +60,6 @@ import { MultiRootWorkspaceModal } from "@/components/MultiRootWorkspaceModal";
 import { useMultiRootWorkspace } from "@/hooks/useMultiRootWorkspace";
 
 export type WorkbenchComposerColumnProps = {
-  account: AccountStatus | null;
   activeProject: Project | null;
   addProjectFromPicker: (opts: { bindSession: boolean; autoTrust?: boolean | undefined; }) => Promise<void>;
   applyAtFile: (entry: ComposerAtFileEntry) => void;
@@ -141,7 +138,6 @@ export type WorkbenchComposerColumnProps = {
   layout: LayoutPrefs;
   liveAt: LiveTokenQuery;
   liveSlash: LiveTokenQuery;
-  liveVoiceOpen: boolean;
   locale: "en" | "de" | "es" | "fil" | "fr" | "id" | "it" | "ja" | "ko" | "pt-BR" | "ru" | "ta" | "uk" | "zh" | "zh-TW";
   mode: string;
   modelId: string;
@@ -244,7 +240,6 @@ export type WorkbenchComposerColumnProps = {
   voice: VoiceFsmState;
   voiceDictationAutoSend: boolean;
   voiceGate: VoiceGate;
-  welcomeBrandKind: SuperGrokBrandKind;
   welcomeProviderBrandNode: ReactNode | null;
   welcomeSession: boolean;
   welcomeMotionEnabled: boolean;
@@ -285,7 +280,6 @@ type ComposerAttachLabels = {
 
 export function WorkbenchComposerColumn(p: WorkbenchComposerColumnProps) {
   const {
-    account,
     activeProject,
     addProjectFromPicker,
     bindSessionProject,
@@ -334,7 +328,6 @@ export function WorkbenchComposerColumn(p: WorkbenchComposerColumnProps) {
     sideDockActive,
     switchToWorktree,
     switchToBranch,
-    welcomeBrandKind,
     welcomeProviderBrandNode,
     welcomeSession,
     welcomeMotionEnabled,
@@ -395,7 +388,7 @@ export function WorkbenchComposerColumn(p: WorkbenchComposerColumnProps) {
             }
             data-side-dock={sideDockActive ? "true" : undefined}
           >
-            {welcomeSession && welcomeBrandKind && !sideDockActive ? (
+            {welcomeSession && !sideDockActive ? (
               <div
                 className={
                   "composer-welcome-mark" +
@@ -406,17 +399,13 @@ export function WorkbenchComposerColumn(p: WorkbenchComposerColumnProps) {
               >
                 <div className="composer-welcome-brand">
                   {welcomeProviderBrandNode ?? (
-                    <SuperGrokMark
-                      kind={welcomeBrandKind}
-                      title={
-                        customRouteActive
-                          ? "SuperGrok"
-                          : account?.billing?.subscriptionTier?.trim() ||
-                            (welcomeBrandKind === "heavy"
-                              ? "SuperGrok Heavy"
-                              : "SuperGrok")
-                      }
-                    />
+                    <div
+                      className="composer-welcome-product"
+                      aria-label={tr("app.name")}
+                    >
+                      <GrokLogo size={28} />
+                      <span>{tr("app.name")}</span>
+                    </div>
                   )}
                 </div>
                 <div

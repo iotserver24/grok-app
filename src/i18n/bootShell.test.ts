@@ -9,7 +9,7 @@ import { LOCALES, loadAllLocaleCatalogs, messages } from "./messages";
 
 const INDEX_HTML = resolve(__dirname, "../../index.html");
 
-/** One row: `"ja": ["Grok \u3078\u3088\u3046\u3053\u305d", "..."],` */
+/** One row: `"ja": ["Welcome to Supercharge", "..."],` */
 const ROW =
   /^\s*"([A-Za-z-]+)":\s*\["((?:[^"\\]|\\.)*)",\s*"((?:[^"\\]|\\.)*)"\],?\s*$/gm;
 

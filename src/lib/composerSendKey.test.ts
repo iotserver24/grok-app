@@ -60,7 +60,7 @@ describe("composerSendKey pref storage", () => {
 
   it("ignores unknown storage values", () => {
     expect(
-      loadComposerSendKeyPref(memoryStorage({ "grok.composerSendKey": "weird" })),
+      loadComposerSendKeyPref(memoryStorage({ "supercharge.composerSendKey": "weird" })),
     ).toBe("enter");
   });
 });

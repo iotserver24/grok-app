@@ -61,7 +61,6 @@ import {
   providerSaveErrorMessageKey,
   resolveProviderApplyEffect,
   resolveProvidersEmptyState,
-  unsupportedGrokBuildProxyModels,
 } from "@/lib/providerRouteHonesty";
 import {
   PROVIDER_PRESETS,
@@ -86,8 +85,6 @@ import { formatProviderBalanceLine } from "@/lib/providerBalanceFormat";
 
 export interface ProvidersPanelProps {
   locale: Locale;
-  /** Official OAuth / CLI auth / official API key present. */
-  officialAvailable?: boolean;
   /**
    * Provider list mutated (create / update / delete / import).
    * Parent should refresh composer model groups — lightweight, no route recycle toast.
@@ -132,7 +129,6 @@ function FieldHelp({ label, tip }: { label: string; tip: string }) {
 
 export function ProvidersPanel({
   locale,
-  officialAvailable = false,
   onProvidersChanged,
   onProviderActivated,
   onToast,
@@ -182,12 +178,6 @@ export function ProvidersPanel({
     id: string;
     name: string;
   } | null>(null);
-  /** Official xAI API key (for speech / STT when not using OAuth). */
-  const [hasOfficialKey, setHasOfficialKey] = useState(false);
-  const [officialKeyDraft, setOfficialKeyDraft] = useState("");
-  const [showOfficialKey, setShowOfficialKey] = useState(false);
-  const [officialKeyBusy, setOfficialKeyBusy] = useState(false);
-
   /** Zhipu-style multi-endpoint picker (gallery click). */
   const [endpointPickerPreset, setEndpointPickerPreset] =
     useState<ProviderPreset | null>(null);
@@ -213,13 +203,7 @@ export function ProvidersPanel({
   );
 
   const providerModeOptions = useMemo(
-    () => [
-      { value: "generic", label: tr("prov.mode.generic") },
-      {
-        value: "grok_build_proxy",
-        label: tr("prov.mode.grokBuildProxy"),
-      },
-    ],
+    () => [{ value: "generic", label: tr("prov.mode.generic") }],
     [tr],
   );
 
@@ -228,16 +212,6 @@ export function ProvidersPanel({
     if (!q) return remoteModels;
     return remoteModels.filter((m) => m.id.toLowerCase().includes(q));
   }, [remoteModels, modelSearch]);
-
-  const unsupportedNativeModels = useMemo(
-    () =>
-      unsupportedGrokBuildProxyModels({
-        providerMode: form.providerMode,
-        selectedModelIds: form.models.map((model) => model.id),
-        remoteModels,
-      }),
-    [form.models, form.providerMode, remoteModels],
-  );
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -252,15 +226,9 @@ export function ProvidersPanel({
           configPath: "",
           agentHome: "",
         });
-        setHasOfficialKey(false);
         return;
       }
-      const [r, masked] = await Promise.all([
-        api.providersList(),
-        api.secretsGetMasked().catch(() => null),
-      ]);
-      setList(r);
-      setHasOfficialKey(!!masked?.hasOfficialKey);
+      setList(await api.providersList());
     } catch (e) {
       setError(String(e));
     } finally {
@@ -275,9 +243,6 @@ export function ProvidersPanel({
   const providers = list?.providers ?? [];
   const activeSource = list?.activeSource ?? "official";
   const activeProviderId = list?.activeProviderId ?? null;
-  const officialActive = activeSource === "official";
-  /** Show official row even without OAuth so users can paste an API key for speech. */
-  const showOfficialRow = true;
 
   /** Open preset gallery (or skip to blank form when no presets). */
   const openCreate = () => {
@@ -441,55 +406,6 @@ export function ProvidersPanel({
     }
   };
 
-  const openOfficial = () => {
-    setSelection("official");
-    setEditingId(null);
-    setRightMode("official");
-    setHint(null);
-    setOfficialKeyDraft("");
-    setShowOfficialKey(false);
-  };
-
-  const saveOfficialKey = async () => {
-    const key = officialKeyDraft.trim();
-    if (!key || !api.isTauri()) return;
-    setOfficialKeyBusy(true);
-    setHint(null);
-    try {
-      await api.secretsSet({ officialApiKey: key });
-      setOfficialKeyDraft("");
-      setShowOfficialKey(false);
-      setHasOfficialKey(true);
-      setHint(tr("prov.officialKeySaved"));
-      setHintTone("ok");
-      onProviderActivated?.();
-    } catch (e) {
-      setHint(String(e));
-      setHintTone("err");
-    } finally {
-      setOfficialKeyBusy(false);
-    }
-  };
-
-  const clearOfficialKey = async () => {
-    if (!api.isTauri() || !hasOfficialKey) return;
-    setOfficialKeyBusy(true);
-    setHint(null);
-    try {
-      await api.secretsSet({ officialApiKey: "" });
-      setHasOfficialKey(false);
-      setOfficialKeyDraft("");
-      setHint(tr("prov.officialKeyCleared"));
-      setHintTone("muted");
-      onProviderActivated?.();
-    } catch (e) {
-      setHint(String(e));
-      setHintTone("err");
-    } finally {
-      setOfficialKeyBusy(false);
-    }
-  };
-
   const openEdit = (p: api.CustomProvider) => {
     setSelection(p.id);
     setEditingId(p.id);
@@ -500,10 +416,7 @@ export function ProvidersPanel({
       baseUrlFullPath: !!p.baseUrlFullPath,
       apiKey: "",
       apiBackend: p.apiBackend || "responses",
-      providerMode:
-        p.providerMode === "grok_build_proxy"
-          ? "grok_build_proxy"
-          : "generic",
+      providerMode: "generic",
       appendPrompt: p.appendPrompt ?? "",
       supportsVision: !!p.supportsVision,
       models: modelsFromProvider(p),
@@ -647,7 +560,7 @@ export function ProvidersPanel({
         name: form.name.trim() || id,
         hasApiKey: true,
         apiBackend: form.apiBackend,
-        providerMode: form.providerMode,
+        providerMode: "generic",
         isDefault: false,
         models,
         efforts: fallbackEfforts,
@@ -780,10 +693,8 @@ export function ProvidersPanel({
       const key = providerSaveErrorMessageKey(kind) as MessageKey;
       // Prefer classified copy for known kinds; keep detail for generic other.
       const msg =
-        /grok_build_proxy|supports_backend_search|live \/models/i.test(rawError)
-          ? tr("prov.err.nativeCapability")
-          : kind === "other"
-            ? tr("prov.err.other", { detail: rawError })
+        kind === "other"
+          ? tr("prov.err.other", { detail: rawError })
           : kind === "timeout"
             ? tr("prov.err.saveTimeout")
             : tr(key);
@@ -816,20 +727,6 @@ export function ProvidersPanel({
       }
     } catch (e) {
       setError(String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const activateOfficial = async (e?: MouseEvent) => {
-    e?.stopPropagation();
-    setBusy(true);
-    try {
-      const r = await api.providersActivate("official");
-      setList(r);
-      onProviderActivated?.();
-    } catch (err) {
-      setError(String(err));
     } finally {
       setBusy(false);
     }
@@ -1044,10 +941,7 @@ export function ProvidersPanel({
     customCount: providers.length,
     loadError: error,
   });
-  const listEmpty =
-    emptyState.kind === "no_custom" &&
-    !showOfficialRow &&
-    providers.length === 0;
+  const listEmpty = emptyState.kind === "no_custom" && providers.length === 0;
 
   return (
     <div className="prov-panel" data-testid="providers-panel">
@@ -1101,59 +995,6 @@ export function ProvidersPanel({
 
           <OverlayScroll className="prov-rail">
             <div className="prov-rail__items" role="list">
-            {showOfficialRow && (
-              <div
-                role="listitem"
-                className={
-                  "prov-item" +
-                  (selection === "official" ? " is-selected" : "") +
-                  (officialActive ? " is-active" : "")
-                }
-              >
-                <button
-                  type="button"
-                  className="prov-item__main"
-                  onClick={openOfficial}
-                >
-                  <span className="prov-item__avatar" aria-hidden>
-                    G
-                  </span>
-                  <span className="prov-item__text">
-                    <span className="prov-item__name">
-                      {tr("prov.officialName")}
-                    </span>
-                    {(hasOfficialKey || officialAvailable) && (
-                      <span className="prov-item__sub">
-                        {officialAvailable
-                          ? tr("prov.officialAuthOk")
-                          : tr("prov.officialKeyOnly")}
-                      </span>
-                    )}
-                  </span>
-                </button>
-                {officialAvailable ? (
-                  !officialActive ? (
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--sm prov-item__use"
-                      disabled={busy}
-                      onClick={(e) => void activateOfficial(e)}
-                    >
-                      {tr("prov.useThis")}
-                    </button>
-                  ) : (
-                    <span
-                      className="prov-item__using"
-                      title={tr("prov.active")}
-                      aria-label={tr("prov.active")}
-                    >
-                      <IconCheck size={14} />
-                    </span>
-                  )
-                ) : null}
-              </div>
-            )}
-
             {providers.map((p) => {
               const active =
                 activeSource === "custom" && activeProviderId === p.id;
@@ -1223,16 +1064,6 @@ export function ProvidersPanel({
             {listEmpty && (
               <div className="prov-rail-empty">{tr("prov.emptyTitle")}</div>
             )}
-            {emptyState.kind === "no_custom" &&
-            emptyState.messageKey &&
-            showOfficialRow ? (
-              <div
-                className="prov-rail-empty"
-                data-testid="prov-empty-no-custom"
-              >
-                {tr(emptyState.messageKey as MessageKey)}
-              </div>
-            ) : null}
             </div>
           </OverlayScroll>
         </aside>
@@ -1299,113 +1130,6 @@ export function ProvidersPanel({
                   </button>
                 ))}
               </div>
-            </div>
-          )}
-
-          {rightMode === "official" && (
-            <div className="prov-detail settings-card">
-              <div className="prov-detail__head">
-                <div>
-                  <h3 className="prov-detail__title">
-                    {tr("prov.officialName")}
-                  </h3>
-                  <p className="prov-detail__sub">
-                    {tr("prov.officialDesc")}
-                  </p>
-                </div>
-                {officialAvailable ? (
-                  officialActive ? (
-                    <span className="account-badge account-badge--ok">
-                      {tr("prov.active")}
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn--solid"
-                      disabled={busy}
-                      onClick={() => void activateOfficial()}
-                    >
-                      {tr("prov.useThis")}
-                    </button>
-                  )
-                ) : null}
-              </div>
-              <p className="prov-detail__sub" id="settings-anchor-official-key">
-                {tr("prov.officialVoiceHint")}
-              </p>
-              <label className="prov-field">
-                <span className="prov-field__label">
-                  {tr("prov.officialApiKey")}
-                </span>
-                <div className="prov-key-row">
-                  <input
-                    className="settings-input"
-                    type={showOfficialKey ? "text" : "password"}
-                    value={officialKeyDraft}
-                    onChange={(e) => setOfficialKeyDraft(e.target.value)}
-                    placeholder={
-                      hasOfficialKey
-                        ? tr("prov.keyKeep")
-                        : tr("prov.officialKeyPh")
-                    }
-                    autoComplete="off"
-                    spellCheck={false}
-                    disabled={officialKeyBusy}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => setShowOfficialKey((v) => !v)}
-                  >
-                    {showOfficialKey ? tr("prov.keyHide") : tr("prov.keyShow")}
-                  </button>
-                </div>
-              </label>
-              <div className="prov-form__actions">
-                <button
-                  type="button"
-                  className="btn btn--solid"
-                  disabled={
-                    officialKeyBusy || !officialKeyDraft.trim() || !api.isTauri()
-                  }
-                  onClick={() => void saveOfficialKey()}
-                >
-                  {officialKeyBusy
-                    ? tr("prov.saving")
-                    : tr("prov.officialKeySave")}
-                </button>
-                {hasOfficialKey ? (
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    disabled={officialKeyBusy}
-                    onClick={() => void clearOfficialKey()}
-                  >
-                    {tr("prov.officialKeyClear")}
-                  </button>
-                ) : null}
-              </div>
-              {hasOfficialKey ? (
-                <p className="prov-detail__sub">{tr("prov.officialKeyPresent")}</p>
-              ) : null}
-              {!officialAvailable ? (
-                <p className="prov-detail__sub">{tr("prov.officialLoginHint")}</p>
-              ) : null}
-              {hint && rightMode === "official" ? (
-                <p
-                  className={
-                    "prov-hint" +
-                    (hintTone === "ok"
-                      ? " prov-hint--ok"
-                      : hintTone === "err"
-                        ? " prov-hint--err"
-                        : "")
-                  }
-                  role="status"
-                >
-                  {hint}
-                </p>
-              ) : null}
             </div>
           )}
 
@@ -2092,39 +1816,16 @@ export function ProvidersPanel({
                 >
                   <FieldHelp
                     label={tr("prov.mode")}
-                    tip={
-                      form.providerMode === "grok_build_proxy"
-                        ? tr("prov.mode.grokBuildProxyHint")
-                        : tr("prov.mode.genericHint")
-                    }
+                    tip={tr("prov.mode.genericHint")}
                   />
                   <Select
-                    value={form.providerMode}
-                    onChange={(v) =>
-                      setForm((f) => ({
-                        ...f,
-                        providerMode:
-                          v === "grok_build_proxy"
-                            ? "grok_build_proxy"
-                            : "generic",
-                        apiBackend:
-                          v === "grok_build_proxy" ? "responses" : f.apiBackend,
-                      }))
-                    }
+                    value="generic"
+                    onChange={() => undefined}
                     options={providerModeOptions}
                     aria-label={tr("prov.mode")}
                     className="prov-field__select"
+                    disabled
                   />
-                  {unsupportedNativeModels.length > 0 ? (
-                    <span
-                      className="prov-field__hint prov-field__hint--error"
-                      role="alert"
-                    >
-                      {tr("prov.mode.grokBuildProxyUnsupported", {
-                        models: unsupportedNativeModels.join(", "),
-                      })}
-                    </span>
-                  ) : null}
                 </div>
               </div>
 

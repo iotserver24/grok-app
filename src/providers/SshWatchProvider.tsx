@@ -18,7 +18,7 @@ export type SshDraftRemote = {
   path: string;
 };
 
-const TITLES_KEY = "grok-app.sshRemoteTitles";
+const TITLES_KEY = "supercharge-app.sshRemoteTitles";
 
 function loadTitleOverlay(): Record<string, string> {
   try {

@@ -1,6 +1,6 @@
 /**
  * `pnpm dev` must merge tauri.dev.conf.json so debug does not steal the
- * installed Grok single-instance mutex / WebView2 user-data dir.
+ * installed Supercharge single-instance mutex / WebView2 user-data dir.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -11,17 +11,27 @@ const PKG = resolve(ROOT, "package.json");
 const BASE_CONF = resolve(ROOT, "src-tauri/tauri.conf.json");
 const DEV_CONF = resolve(ROOT, "src-tauri/tauri.dev.conf.json");
 
-describe("tauri dev identifier overlay", () => {
-  it("ships a distinct identifier from the release bundle", () => {
+describe("Supercharge package and Tauri identity", () => {
+  it("ships Supercharge package metadata", () => {
+    const pkg = JSON.parse(readFileSync(PKG, "utf8")) as {
+      name?: string;
+      description?: string;
+    };
+    expect(pkg.name).toBe("supercharge-app");
+    expect(pkg.description).toContain("Supercharge");
+    expect(pkg.description).not.toContain("Grok");
+  });
+
+  it("ships a distinct development identifier from the release bundle", () => {
     expect(existsSync(DEV_CONF)).toBe(true);
     const base = JSON.parse(readFileSync(BASE_CONF, "utf8")) as { identifier: string };
     const dev = JSON.parse(readFileSync(DEV_CONF, "utf8")) as {
       identifier: string;
       productName?: string;
     };
-    expect(base.identifier).toBe("com.grokapp.desktop");
-    expect(dev.identifier).toBe("com.grokapp.desktop.dev");
-    expect(dev.productName).toBe("Grok Dev");
+    expect(base.identifier).toBe("com.supercharge.desktop");
+    expect(dev.identifier).toBe("com.supercharge.desktop.dev");
+    expect(dev.productName).toBe("Supercharge Dev");
   });
 
   it("wires pnpm dev to merge the overlay", () => {

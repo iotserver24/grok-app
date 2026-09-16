@@ -20,7 +20,7 @@ export type TraceHistoryEntry = {
   uploaded?: boolean;
 };
 
-export const TRACE_HISTORY_STORAGE_KEY = "grok.traceHistory";
+export const TRACE_HISTORY_STORAGE_KEY = "supercharge.traceHistory";
 export const TRACE_HISTORY_MAX = 20;
 
 /** Fired on `window` after a successful record (detail = entries). */

@@ -60,7 +60,7 @@ pub fn apply_subagents_to_command(cmd: &mut tokio::process::Command, enabled: bo
         cmd.arg(flag);
     }
     if let Some(v) = subagents_spawn_env_value(enabled) {
-        cmd.env("GROK_SUBAGENTS", v);
+        cmd.env("SUPERCHARGE_SUBAGENTS", v);
     }
 }
 

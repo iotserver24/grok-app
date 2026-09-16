@@ -173,7 +173,6 @@ pub fn install(app: &AppHandle) -> Result<(), String> {
     // App-wide set_menu reattaches File/Edit/Window/Help to windows that have
     // no menu of their own. Keep non-document windows chrome-less.
     crate::pet_window::reassert_overlay_chrome(app);
-    crate::wallpaper_grok_album::reassert_window_chrome(app);
     Ok(())
 }
 

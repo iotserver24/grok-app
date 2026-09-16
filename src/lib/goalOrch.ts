@@ -22,7 +22,7 @@ export const GOAL_ORCH_EVENT_MAX = 40;
 export const GOAL_ORCH_DETAIL_MAX = 200;
 
 /** Display-only pref (localStorage). Default on. */
-export const GOAL_ORCH_UI_STORAGE_KEY = "grok.goalOrchUiEnabled";
+export const GOAL_ORCH_UI_STORAGE_KEY = "supercharge.goalOrchUiEnabled";
 
 /** Fired on `window` after a successful save (detail = boolean). */
 export const GOAL_ORCH_UI_CHANGE_EVENT = "grok-goal-orch-ui-change";

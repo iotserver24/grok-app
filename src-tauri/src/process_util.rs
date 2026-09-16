@@ -136,7 +136,7 @@ pub async fn kill_process_tree_async(pid: u32) -> bool {
             Ok(ok) => ok,
             Err(e) => {
                 tracing::warn!(
-                    target: "grok_app::process",
+                    target: "supercharge_app::process",
                     pid,
                     error = %e,
                     "kill_process_tree_async: join failed"
@@ -175,7 +175,7 @@ pub fn kill_process_tree(pid: u32) -> bool {
             Ok(c) => c,
             Err(e) => {
                 tracing::warn!(
-                    target: "grok_app::process",
+                    target: "supercharge_app::process",
                     pid,
                     error = %e,
                     "kill_process_tree: failed to spawn taskkill"
@@ -190,13 +190,13 @@ pub fn kill_process_tree(pid: u32) -> bool {
                     let ok = status.success();
                     if ok {
                         tracing::info!(
-                            target: "grok_app::process",
+                            target: "supercharge_app::process",
                             pid,
                             "kill_process_tree: taskkill ok"
                         );
                     } else {
                         tracing::warn!(
-                            target: "grok_app::process",
+                            target: "supercharge_app::process",
                             pid,
                             code = ?status.code(),
                             "kill_process_tree: taskkill exited non-zero"
@@ -211,7 +211,7 @@ pub fn kill_process_tree(pid: u32) -> bool {
                     let _ = child.kill();
                     let _ = child.wait();
                     tracing::warn!(
-                        target: "grok_app::process",
+                        target: "supercharge_app::process",
                         pid,
                         timeout_secs = KILL_PROCESS_TREE_TIMEOUT.as_secs(),
                         "kill_process_tree: taskkill timed out"
@@ -220,7 +220,7 @@ pub fn kill_process_tree(pid: u32) -> bool {
                 }
                 Err(e) => {
                     tracing::warn!(
-                        target: "grok_app::process",
+                        target: "supercharge_app::process",
                         pid,
                         error = %e,
                         "kill_process_tree: wait failed"
@@ -245,12 +245,10 @@ fn home_env_present() -> bool {
 /// Ensure child sees `$HOME` when the parent GUI process does not.
 ///
 /// Windows apps launched from Start Menu / Explorer typically only have
-/// `USERPROFILE`, not `HOME`. Grok Build CLI hub resolves data under
-/// `$GROK_HOME` **or** `$HOME/.grok` and errors with
-/// `neither $GROK_HOME nor $HOME is set` when both are missing
-/// (e.g. `grok worktree db path|stats|rebuild`).
+/// `USERPROFILE`, not `HOME`. Supercharge resolves data under
+/// `$SUPERCHARGE_HOME` or `$HOME/.supercharge` and needs one of those roots.
 ///
-/// Does **not** set `GROK_HOME` — agent/session paths set that explicitly
+/// Does **not** set `SUPERCHARGE_HOME` — agent/session paths set that explicitly
 /// (independent vs shared). Worktree / update / probe CLIs should use the
 /// user's real home (`USERPROFILE` on Windows) via `HOME`.
 pub fn ensure_home_env_std(cmd: &mut StdCommand) {
@@ -276,7 +274,7 @@ pub fn ensure_home_env_tokio(cmd: &mut tokio::process::Command) {
     cmd.env("HOME", home);
 }
 
-/// Standard env for GUI-spawned Grok CLI / sibling tools:
+/// Standard env for GUI-spawned Supercharge CLI / sibling tools:
 /// no-window (Windows), enriched PATH, and HOME when missing.
 pub fn apply_cli_env_std(cmd: &mut StdCommand) {
     apply_no_window_std(cmd);
@@ -494,7 +492,7 @@ pub fn user_tool_path_dirs(home: &Path) -> Vec<PathBuf> {
 
     // nvm (unix-style ~/.nvm): alias/default is often a major (`22`) or nested
     // alias (`lts/*`), not the on-disk folder (`v22.22.0`). Exact join misses
-    // node → GUI `grok update --check` (installer=npm) fails with ENOENT.
+    // node → GUI `supercharge update --check` (installer=npm) fails with ENOENT.
     for bin in nvm_node_bin_dirs(home) {
         push_dir(bin);
     }
@@ -644,7 +642,7 @@ pub fn enriched_path_env() -> Option<String> {
     let home_s = home.to_string_lossy();
     #[cfg(target_os = "windows")]
     {
-        push_path_part(&mut parts, &format!(r"{home_s}\.grok\bin"));
+        push_path_part(&mut parts, &format!(r"{home_s}\.supercharge\bin"));
         push_path_part(&mut parts, &format!(r"{home_s}\.local\bin"));
         push_path_part(&mut parts, &format!(r"{home_s}\.cargo\bin"));
         push_path_part(&mut parts, &format!(r"{home_s}\AppData\Local\pnpm"));
@@ -659,7 +657,7 @@ pub fn enriched_path_env() -> Option<String> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        push_path_part(&mut parts, &format!("{home_s}/.grok/bin"));
+        push_path_part(&mut parts, &format!("{home_s}/.supercharge/bin"));
         push_path_part(&mut parts, &format!("{home_s}/.local/bin"));
         push_path_part(&mut parts, &format!("{home_s}/.cargo/bin"));
         push_path_part(&mut parts, &format!("{home_s}/.bun/bin"));

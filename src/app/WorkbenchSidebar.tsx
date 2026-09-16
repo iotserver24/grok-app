@@ -16,7 +16,6 @@ import { Tip } from "@/components/ui/tooltip";
 import { SidebarBrand } from "@/components/SidebarBrand";
 import { SidebarUpdateButton } from "@/components/SidebarUpdateButton";
 import { UserMenu } from "@/components/UserMenu";
-import { GrokLogo } from "@/components/GrokLogo";
 import {
   ProviderBrandIcon,
   providerAvatarLetter,
@@ -28,27 +27,10 @@ import {
   IconNewChat,
   IconScheduled,
   IconSearch,
-  IconSettings,
 } from "@/components/icons";
 import { createT } from "@/i18n";
-import {
-  isDesktopHost,
-  type AccountStatus,
-  type CustomProvider,
-  type SavedAccount,
-} from "@/lib/api";
+import { isDesktopHost, type CustomProvider } from "@/lib/api";
 import { openThemeEditorWindow } from "@/lib/api/system";
-import {
-  accountDisplayName,
-  accountInitials,
-  formatQuotaResetTime,
-  tierLabel,
-} from "@/lib/accountUi";
-import {
-  formatQuotaRemainLabel,
-  resolveQuotaPercents,
-} from "@/lib/accountQuotaHonesty";
-import type { SwitcherQuota } from "@/lib/accountSwitcherQuota";
 import {
   formatProviderBalanceLine,
   type ProviderBalanceCache,
@@ -71,12 +53,6 @@ const ThemeEditorModal = lazy(async () => {
   const m = await import("@/components/ThemeEditorModal");
   return { default: m.ThemeEditorModal };
 });
-
-function quotaBarFillClass(usedPercent: number | null): string {
-  if (usedPercent != null && usedPercent >= 90) return " is-danger";
-  if (usedPercent != null && usedPercent >= 70) return " is-warn";
-  return "";
-}
 
 type SidebarLayout = {
   sidebarCollapsed: boolean;
@@ -121,8 +97,6 @@ export type WorkbenchSidebarProps = {
   closeImmediately?: boolean;
   theme: Theme;
   themePreference: ThemePreference;
-  account: AccountStatus | null;
-  accountBusy: boolean;
   providerBalanceCache: ProviderBalanceCache | null;
   providerBalanceBusy: boolean;
   providerBalanceError: string | null;
@@ -132,14 +106,7 @@ export type WorkbenchSidebarProps = {
   }) => void | Promise<void>;
   applyThemeChoice: (preference: ThemePreference) => void;
   onSettings: () => void;
-  onAccountSettings: () => void;
   onTutorial: () => void;
-  onLogin: () => void;
-  onLogout: () => void;
-  savedAccounts: SavedAccount[];
-  activeAccountId: string | null;
-  accountQuotas: Record<string, SwitcherQuota>;
-  onSwitchAccount: (id: string) => void;
   onUserMenuOpened: () => void;
 };
 
@@ -182,22 +149,13 @@ export function WorkbenchSidebar(props: WorkbenchSidebarProps) {
     closeImmediately = false,
     theme,
     themePreference,
-    account,
-    accountBusy,
     providerBalanceCache,
     providerBalanceBusy,
     providerBalanceError,
     loadProviderBalance,
     applyThemeChoice,
     onSettings,
-    onAccountSettings,
     onTutorial,
-    onLogin,
-    onLogout,
-    savedAccounts,
-    activeAccountId,
-    accountQuotas,
-    onSwitchAccount,
     onUserMenuOpened,
   } = props;
 
@@ -207,47 +165,19 @@ export function WorkbenchSidebar(props: WorkbenchSidebarProps) {
       providerId: activeCustomProvider.id,
       baseUrl: activeCustomProvider.baseUrl,
     });
-  const signedInOfficial =
-    !customRouteActive && !!account?.profile?.signedIn;
-  const pinQuota = customRouteActive
-    ? providerSupportsBalance
-    : signedInOfficial;
-  const livePercents = resolveQuotaPercents(account?.billing ?? null);
-  const remainLabel = formatQuotaRemainLabel(livePercents.remainingPercent);
-  const resetTime = formatQuotaResetTime(
-    account?.billing?.resetsAt,
-    locale,
-  );
-  const officialName = account?.profile
-    ? accountDisplayName(account.profile, tr("common.local"))
+  const identityName = customRouteActive
+    ? activeCustomProvider?.name.trim() ||
+      activeCustomProvider?.id ||
+      tr("prov.customProvider")
     : tr("common.local");
-  const customName =
-    activeCustomProvider?.name.trim() ||
-    activeCustomProvider?.id ||
-    tr("prov.customProvider");
-  const pinPlan = customRouteActive
-    ? `${tr("prov.customProvider")}${
-        activeCustomProvider?.model
-          ? ` / ${activeCustomProvider.model}`
-          : ""
-      }`
-    : account?.billing
-      ? tierLabel(account.billing, account.channel ?? "none")
-      : "Grok Build";
-  const pinResetText =
-    signedInOfficial && resetTime ? resetTime : null;
   const providerBalance =
     providerBalanceCache != null &&
     providerBalanceCache.providerId === activeCustomProvider?.id
       ? providerBalanceCache.result
       : null;
-  const pinRemain = customRouteActive
+  const providerBalanceLine = customRouteActive
     ? formatProviderBalanceLine(providerBalance)
-    : remainLabel;
-  const remainLow =
-    !customRouteActive &&
-    livePercents.remainingPercent != null &&
-    livePercents.remainingPercent <= 10;
+    : null;
   return (
     <aside
       id="workbench-sidebar"
@@ -364,8 +294,9 @@ export function WorkbenchSidebar(props: WorkbenchSidebarProps) {
                   activeCustomProvider
                     ? activeCustomProvider.name.trim() ||
                       activeCustomProvider.id
-                    : "Grok"
+                    : "Supercharge"
                 }
+                subtitle={tr("app.tagline")}
               />
             </span>
             <span className="nav-new__action" aria-hidden>
@@ -427,28 +358,10 @@ export function WorkbenchSidebar(props: WorkbenchSidebarProps) {
               closeImmediately={closeImmediately}
               theme={theme}
               themePreference={themePreference}
-              locale={locale}
-              account={account}
-              activeProvider={activeCustomProvider}
-              accountBusy={accountBusy}
-              officialQuota={
-                signedInOfficial
-                  ? {
-                      plan: pinPlan,
-                      resetText: pinResetText,
-                      remainLabel: remainLabel,
-                      usedPercent: livePercents.usedPercent,
-                      remainLow,
-                      barFillClass: quotaBarFillClass(
-                        livePercents.usedPercent,
-                      ),
-                    }
-                  : null
-              }
               providerBalance={
                 customRouteActive && providerSupportsBalance
                   ? {
-                      line: pinRemain,
+                      line: providerBalanceLine,
                       busy: providerBalanceBusy,
                       error: providerBalanceError,
                       refreshLabel: tr("prov.balance.refresh"),
@@ -457,12 +370,8 @@ export function WorkbenchSidebar(props: WorkbenchSidebarProps) {
                     }
                   : null
               }
-              savedAccounts={savedAccounts}
-              activeAccountId={activeAccountId}
-              accountQuotas={accountQuotas}
-              onSwitchAccount={onSwitchAccount}
-              onAccountSettings={onAccountSettings}
               labels={{
+                settings: tr("sidebar.settings"),
                 whatsNew: tr("whatsNew.menu"),
                 tutorial: tr("tutorial.menu"),
                 theme: tr("user.theme"),
@@ -470,13 +379,8 @@ export function WorkbenchSidebar(props: WorkbenchSidebarProps) {
                 themeLight: tr("settings.themeLight"),
                 themeDark: tr("settings.themeDark"),
                 themeEditor: tr("user.themeEditor"),
-                login: tr("account.login"),
-                logout: tr("account.logout"),
-                remaining: tr("account.quotaRemaining"),
-                profileActive: tr("account.profileActive"),
-                switchTo: tr("account.switchTo"),
-                resetsAt: tr("account.resetsAt"),
               }}
+              onSettings={onSettings}
               onWhatsNew={() => requestWhatsNewOpen()}
               onTutorial={onTutorial}
               onTheme={applyThemeChoice}
@@ -489,8 +393,6 @@ export function WorkbenchSidebar(props: WorkbenchSidebarProps) {
                 }
                 setThemeEditorOpen(true);
               }}
-              onLogin={onLogin}
-              onLogout={onLogout}
             >
               <Tip label={tr("user.menu")}>
                 <button
@@ -509,19 +411,18 @@ export function WorkbenchSidebar(props: WorkbenchSidebarProps) {
                   <div
                     className={
                       "user-avatar" +
-                      (activeCustomProvider &&
+                      (customRouteActive &&
+                      activeCustomProvider &&
                       resolveProviderBrandId({
                         providerId: activeCustomProvider.id,
                         baseUrl: activeCustomProvider.baseUrl,
                       })
                         ? " user-avatar--logo"
-                        : account?.profile?.signedIn
-                          ? " user-avatar--logo"
-                          : "")
+                        : "")
                     }
                     aria-hidden
                   >
-                    {activeCustomProvider ? (
+                    {customRouteActive && activeCustomProvider ? (
                       resolveProviderBrandId({
                         providerId: activeCustomProvider.id,
                         baseUrl: activeCustomProvider.baseUrl,
@@ -537,45 +438,23 @@ export function WorkbenchSidebar(props: WorkbenchSidebarProps) {
                             activeCustomProvider.id,
                         )
                       )
-                    ) : account?.profile?.signedIn ? (
-                      <GrokLogo size={20} />
-                    ) : account?.profile ? (
-                      accountInitials(account.profile)
                     ) : (
-                      "G"
+                      "L"
                     )}
                   </div>
                   <div className="user-meta">
-                    <span className="user-meta__name">
-                      {customRouteActive ? customName : officialName}
-                    </span>
-                    {pinQuota &&
-                    (pinRemain ||
-                      (providerSupportsBalance && providerBalanceBusy)) ? (
-                      <span
-                        className={
-                          "sidebar__footer-remain" +
-                          (remainLow ? " is-low" : "")
-                        }
-                      >
-                        {pinRemain ??
-                          (providerBalanceBusy ? "…" : null)}
+                    <span className="user-meta__name">{identityName}</span>
+                    {customRouteActive &&
+                    providerSupportsBalance &&
+                    (providerBalanceLine || providerBalanceBusy) ? (
+                      <span className="sidebar__footer-remain">
+                        {providerBalanceLine ?? (providerBalanceBusy ? "…" : null)}
                       </span>
                     ) : null}
                   </div>
                 </button>
               </Tip>
             </UserMenu>
-            <Tip label={tr("sidebar.settings")}>
-              <button
-                type="button"
-                className="sidebar__footer-settings chrome-btn"
-                aria-label={tr("sidebar.settings")}
-                onClick={onSettings}
-              >
-                <IconSettings size={16} />
-              </button>
-            </Tip>
           </div>
         </div>
       </div>

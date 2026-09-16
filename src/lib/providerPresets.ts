@@ -208,24 +208,6 @@ export const ORCAROUTER_MODELS: ProviderModelEntry[] = [
   },
 ];
 
-/** Amux OpenAI-compatible relay (official Grok catalog ids). */
-export const AMUX_MODELS: ProviderModelEntry[] = [
-  { id: "grok-4.6", name: "Grok 4.6", supportsVision: true },
-  { id: "grok-4.5", name: "Grok 4.5", supportsVision: true },
-];
-
-/** Yun API (云驿 yunyi) OpenAI-compatible relay. */
-export const YUN_API_MODELS: ProviderModelEntry[] = [
-  { id: "grok-4.6", name: "Grok 4.6", supportsVision: true },
-  { id: "grok-4.5", name: "Grok 4.5", supportsVision: true },
-];
-
-/** AI98PRO OpenAI-compatible Grok relay. */
-export const AI98PRO_MODELS: ProviderModelEntry[] = [
-  { id: "grok-4.6", name: "Grok 4.6", supportsVision: true },
-  { id: "grok-4.5", name: "Grok 4.5", supportsVision: true },
-];
-
 /**
  * Volcengine Ark (火山方舟) Coding Plan — OpenAI-compatible chat_completions
  * at a non-`/v1` full path root (requires baseUrlFullPath).
@@ -336,30 +318,6 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     apiKeyUrl: "https://orcarouter.ai/",
     supportsVision: true,
   },
-  {
-    id: "amux",
-    name: "Amux",
-    suggestedId: "amux",
-    baseUrl: "https://api.amux.ai/v1",
-    apiBackend: "responses",
-    models: AMUX_MODELS,
-    efforts: officialGrokChannelEfforts(),
-    blurbKey: "prov.preset.amux.blurb",
-    apiKeyUrl: "https://api.amux.ai/register?aff=Vccp",
-    brandId: "amux",
-  },
-  {
-    id: "yun-api",
-    name: "Yun API",
-    suggestedId: "yun-api",
-    baseUrl: "https://api.yunyi.ai/v1",
-    apiBackend: "responses",
-    models: YUN_API_MODELS,
-    efforts: officialGrokChannelEfforts(),
-    blurbKey: "prov.preset.yunApi.blurb",
-    apiKeyUrl: "https://api.yunyi.ai/register/?aff_code=W0iw",
-    // No logo yet
-  },
   /**
    * OpenCode Zen Go gateway. DeepSeek-class models on this host must use
    * `chat_completions` — their Responses stream emits non-standard events
@@ -396,22 +354,6 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     blurbKey: "prov.preset.volcanoArk.blurb",
     apiKeyUrl: "https://console.volcengine.com/ark",
     brandId: "volcano-ark",
-  },
-  /**
-   * AI98PRO Grok relay (Responses). Config id is the short slug `ai98pro`
-   * (host sanitize lowercases); gallery / form display name is AI98PRO.
-   */
-  {
-    id: "ai98pro",
-    name: "AI98PRO",
-    suggestedId: "AI98PRO",
-    baseUrl: "https://ai98pro.xyz/v1",
-    apiBackend: "responses",
-    models: AI98PRO_MODELS,
-    efforts: officialGrokChannelEfforts(),
-    blurbKey: "prov.preset.ai98pro.blurb",
-    apiKeyUrl: "https://ai98pro.xyz",
-    supportsVision: true,
   },
   /**
    * Zhipu / Z.AI GLM. One gallery chip, four OpenAI-compatible roots

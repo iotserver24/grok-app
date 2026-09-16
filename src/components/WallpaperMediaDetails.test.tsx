@@ -30,7 +30,7 @@ vi.mock("@/lib/nativeWebviewCover", () => ({
 const t = createT("en");
 const item: WallpaperGalleryItem = {
   id: "result",
-  source: "imagine",
+  source: "library",
   kind: "image",
   thumbUrl: "",
   fullUrl: "file:///result.png",
@@ -44,11 +44,7 @@ const item: WallpaperGalleryItem = {
     width: 1280,
     height: 720,
     durationMs: 6_750,
-    generation: {
-      operation: "image_edit",
-      aspectRatio: "16:9",
-      requestedModel: "requested-only",
-    },
+    generation: null,
   } as never,
 };
 const parent: WallpaperLibraryEntry = {
@@ -71,7 +67,6 @@ const props = () => ({
   locked: false,
   onClose: vi.fn(),
   onOpenSource: vi.fn(),
-  onReusePrompt: vi.fn(),
 });
 
 afterEach(() => {
@@ -80,16 +75,16 @@ afterEach(() => {
 });
 
 describe("WallpaperMediaDetails", () => {
-  it("shows measured dimensions, requested parameters, and unknown historical fields", () => {
+  it("shows dimensions, source, file size, and missing optional metadata", () => {
     render(<WallpaperMediaDetails {...props()} />);
     expect(screen.getByText("1280 × 720")).toBeTruthy();
-    expect(screen.getByText("Requested model")).toBeTruthy();
-    expect(screen.getByText("requested-only")).toBeTruthy();
+    expect(screen.getByText("Library")).toBeTruthy();
+    expect(screen.getByText("2 kB")).toBeTruthy();
     expect(screen.getAllByText("Not recorded").length).toBeGreaterThan(0);
     expect(screen.getByText("/result.png")).toBeTruthy();
   });
 
-  it("shows measured video duration separately from the requested duration", () => {
+  it("shows measured video duration for a retained library item", () => {
     render(
       <WallpaperMediaDetails
         {...props()}
@@ -99,10 +94,6 @@ describe("WallpaperMediaDetails", () => {
           metadata: {
             ...item.metadata,
             durationMs: 6_750,
-            generation: {
-              operation: "image_to_video",
-              duration: 10,
-            },
           } as never,
         }}
       />,
@@ -111,10 +102,7 @@ describe("WallpaperMediaDetails", () => {
       "textContent",
       "6.8s",
     );
-    expect(screen.getByText("Requested duration").nextElementSibling).toHaveProperty(
-      "textContent",
-      "10s",
-    );
+    expect(screen.queryByText("Requested duration")).toBeNull();
   });
 
   it("sanitizes attribution links and rejects credentials or unsafe schemes", () => {
@@ -153,10 +141,9 @@ describe("WallpaperMediaDetails", () => {
     expect(screen.getByText("600 × 400")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Back to result" }));
     expect(screen.getByText("Result title")).toBeTruthy();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Use prompt for a new image" }),
-    );
-    expect(p.onReusePrompt).toHaveBeenCalledWith(item);
+    expect(
+      screen.queryByRole("button", { name: "Use prompt for a new image" }),
+    ).toBeNull();
   });
 
   it("retains details when the parent is missing or lookup fails, with manual retry", async () => {

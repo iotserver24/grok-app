@@ -10,10 +10,10 @@ import { pathBasename } from "@/lib/attachments";
 import { isHttpUrl, isRealLocalAbsolutePath } from "@/lib/pathRefs";
 import { parsePathLineCitation } from "@/lib/pathLineCitation";
 
-export const FILE_PATH_CARD_BASENAME_STORAGE_KEY = "grok.filePathCardBasename";
+export const FILE_PATH_CARD_BASENAME_STORAGE_KEY = "supercharge.filePathCardBasename";
 
 /** Legacy select key from the unreleased two-option control. */
-const LEGACY_LABEL_STORAGE_KEY = "grok.filePathCardLabel";
+const LEGACY_LABEL_STORAGE_KEY = "supercharge.filePathCardLabel";
 
 /** Fired on `window` after a successful save (detail = basenameOnly). */
 export const FILE_PATH_CARD_BASENAME_CHANGE_EVENT =

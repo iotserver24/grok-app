@@ -17,7 +17,7 @@ export type NotifyQuietHoursPref = {
   end: string;
 };
 
-export const NOTIFY_QUIET_HOURS_STORAGE_KEY = "grok.notifyQuietHours";
+export const NOTIFY_QUIET_HOURS_STORAGE_KEY = "supercharge.notifyQuietHours";
 
 /** Fired on `window` after a successful save (detail = pref). */
 export const NOTIFY_QUIET_HOURS_CHANGE_EVENT = "grok-notify-quiet-hours-change";

@@ -689,6 +689,21 @@
   transform: translate3d(0, 0, 0);
 }
 
+.composer-welcome-product {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+
+.composer-welcome-product .grok-logo {
+  flex: 0 0 auto;
+}
+
 .composer-welcome-prompt {
   width: max-content;
   max-width: calc(100% - 32px);
@@ -744,56 +759,6 @@
   .composer-welcome-mark.is-entering .composer-welcome-prompt {
     animation: none;
   }
-}
-
-/* SuperGrok / SuperGrok Heavy wordmarks (theme via data-theme tokens).
- * Inline SVG — no image fetch; paint should be immediate once mounted. */
-.supergrok-mark {
-  display: block;
-  height: auto;
-  max-width: min(280px, 72vw);
-  color: var(--text-primary);
-  /* Avoid FOUC-style fade; logo should snap in */
-  opacity: 1;
-}
-
-.supergrok-mark--standard {
-  width: min(168px, 48vw);
-}
-
-.supergrok-mark--heavy {
-  width: min(280px, 78vw);
-}
-
-.supergrok-mark__ink {
-  fill: currentColor;
-}
-
-/* HEAVY pill — matches official light/dark treatment (Image reference) */
-.supergrok-mark__badge {
-  fill: #313235;
-}
-
-.supergrok-mark__badge-stroke {
-  fill: none;
-  stroke: transparent;
-  stroke-width: 1;
-}
-
-.supergrok-mark__badge-text {
-  fill: #b5b5b5;
-}
-
-[data-theme="light"] .supergrok-mark__badge {
-  fill: #f3f3f1;
-}
-
-[data-theme="light"] .supergrok-mark__badge-stroke {
-  stroke: rgba(0, 0, 0, 0.06);
-}
-
-[data-theme="light"] .supergrok-mark__badge-text {
-  fill: #646362;
 }
 
 /* Preset provider wordmarks on the welcome composer (DeepSeek / OpenCode / Ark / Zhipu).

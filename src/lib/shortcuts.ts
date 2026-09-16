@@ -13,11 +13,6 @@ import {
   loadShortcutRemaps,
   type ShortcutRemapMap,
 } from "@/lib/shortcutRemap";
-import {
-  SHORTCUT_KEYS_OFF,
-  loadVoiceHotkeyEnabled,
-  shouldFireLiveVoiceHotkey,
-} from "@/lib/voiceHotkeyPref";
 
 export type ShortcutGroup =
   | "workbench"
@@ -60,7 +55,6 @@ export type ShortcutId =
   | "zoomOut"
   | "zoomReset"
   | "doctor"
-  | "liveVoice"
   | "dictation"
   | "promptHistory"
   | "typeToFocus";
@@ -108,7 +102,6 @@ export const SHORTCUT_IDS: readonly ShortcutId[] = [
   "zoomOut",
   "zoomReset",
   "doctor",
-  "liveVoice",
   "dictation",
   "promptHistory",
   "typeToFocus",
@@ -317,14 +310,6 @@ export const SHORTCUTS: ShortcutRow[] = [
     win: "Ctrl Shift D",
   },
   {
-    id: "liveVoice",
-    labelKey: "shortcuts.liveVoice",
-    group: "input",
-    scope: "global",
-    mac: "⌘ ⇧ V",
-    win: "Ctrl Shift V",
-  },
-  {
     // Global Ctrl+Space (not Cmd+Space — Spotlight on macOS). See isVoiceToggleKey.
     id: "dictation",
     labelKey: "shortcuts.voice",
@@ -378,7 +363,6 @@ export const GLOBAL_MOD_SHORTCUT_IDS = [
   "settings",
   "help",
   "doctor",
-  "liveVoice",
   "copyLastReply",
   "toggleSidebar",
   "toggleRightPane",
@@ -401,27 +385,6 @@ export type ShortcutChordContext = {
   typing: boolean;
 };
 
-/** Optional gates for {@link matchGlobalShortcut} / catalog display. */
-export type MatchGlobalShortcutOpts = {
-  /**
-   * When false, the Live Voice catalog chord does not match
-   * (composer / slash / menus stay available). Defaults to loaded pref / true.
-   */
-  voiceHotkeyEnabled?: boolean;
-};
-
-function resolveVoiceHotkeyEnabled(explicit?: boolean): boolean {
-  if (explicit !== undefined) return explicit;
-  if (typeof localStorage !== "undefined") {
-    try {
-      return loadVoiceHotkeyEnabled();
-    } catch {
-      /* private mode / non-browser */
-    }
-  }
-  return true;
-}
-
 /**
  * Match mod-based global shortcuts that App handles in the capture-phase keydown.
  *
@@ -434,16 +397,14 @@ function resolveVoiceHotkeyEnabled(explicit?: boolean): boolean {
  *
  * Behavior (mod chords — safe while the composer or other fields own focus):
  * - findInChat / newChat / settings / search / help / doctor / copyLastReply /
- *   liveVoice / toggleSidebar / sideFiles / sideBrowser / sideTerminal all
+ *   toggleSidebar / sideFiles / sideBrowser / sideTerminal all
  *   match while typing (⌘/Ctrl required; does not steal plain keystrokes)
- * - liveVoice is suppressed when {@link shouldFireLiveVoiceHotkey} is false
  * - App still toggles Settings open/closed from the matched id (leave Settings
  *   from a focused settings field via the same chord)
  */
 export function matchGlobalShortcut(
   ctx: ShortcutChordContext,
   remaps?: ShortcutRemapMap | null,
-  opts?: MatchGlobalShortcutOpts,
 ): GlobalModShortcutId | null {
   const map =
     remaps !== undefined && remaps !== null
@@ -451,8 +412,6 @@ export function matchGlobalShortcut(
       : typeof localStorage !== "undefined"
         ? loadShortcutRemaps()
         : {};
-  const voiceHotkeyEnabled = resolveVoiceHotkeyEnabled(opts?.voiceHotkeyEnabled);
-
   // Default catalog chords never use Alt; reject Alt unless a remap includes it.
   // (Bare OS/browser Alt chords stay unclaimed.)
 
@@ -466,10 +425,6 @@ export function matchGlobalShortcut(
         alt: ctx.alt,
       })
     ) {
-      continue;
-    }
-    // Live Voice hotkey can be disabled in Settings (composer / menus still work).
-    if (id === "liveVoice" && !shouldFireLiveVoiceHotkey(voiceHotkeyEnabled)) {
       continue;
     }
     return id;
@@ -539,24 +494,16 @@ function withSendPref(
   return row;
 }
 
-/** Apply user remaps (and send / Live Voice hotkey prefs) to a catalog row for display. */
+/** Apply user remaps and composer send preferences to a catalog row. */
 export function withEffectiveBindings(
   row: ShortcutRow,
   opts?: {
     sendPref?: ComposerSendKeyPref;
     remaps?: ShortcutRemapMap | null;
-    voiceHotkeyEnabled?: boolean;
   },
 ): ShortcutRow {
   const pref = resolveSendPref(opts?.sendPref);
   let next = withSendPref(row, pref);
-  // Live Voice hotkey disabled → show Off (composer / menus still work).
-  if (
-    row.id === "liveVoice" &&
-    !shouldFireLiveVoiceHotkey(resolveVoiceHotkeyEnabled(opts?.voiceHotkeyEnabled))
-  ) {
-    return { ...next, mac: SHORTCUT_KEYS_OFF, win: SHORTCUT_KEYS_OFF };
-  }
   const remaps =
     opts?.remaps !== undefined
       ? opts.remaps
@@ -581,7 +528,6 @@ export function shortcutsForPlatform(
   platform: "mac" | "win" | "other",
   sendPref?: ComposerSendKeyPref,
   remaps?: ShortcutRemapMap | null,
-  voiceHotkeyEnabled?: boolean,
 ): Array<{
   id: ShortcutId;
   labelKey: string;
@@ -598,7 +544,6 @@ export function shortcutsForPlatform(
     const row = withEffectiveBindings(s, {
       sendPref,
       remaps: map,
-      voiceHotkeyEnabled,
     });
     return {
       id: row.id,
@@ -640,7 +585,6 @@ export function formatShortcutHint(
 export function shortcutsByGroup(
   sendPref?: ComposerSendKeyPref,
   remaps?: ShortcutRemapMap | null,
-  voiceHotkeyEnabled?: boolean,
 ): Array<{ group: ShortcutGroup; rows: ShortcutRow[] }> {
   const map =
     remaps !== undefined
@@ -651,7 +595,7 @@ export function shortcutsByGroup(
   return SHORTCUT_GROUP_ORDER.map((group) => ({
     group,
     rows: SHORTCUTS.filter((s) => s.group === group).map((s) =>
-      withEffectiveBindings(s, { sendPref, remaps: map, voiceHotkeyEnabled }),
+      withEffectiveBindings(s, { sendPref, remaps: map }),
     ),
   }));
 }

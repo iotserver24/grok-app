@@ -10,7 +10,7 @@ import {
   buildExportImagePipeline,
   buildShareCardModel,
   exportableToShareMessages,
-  GROK_APP_SHARE_FOOTER,
+  SUPERCHARGE_APP_SHARE_FOOTER,
 } from "./sessionExportImage";
 import {
   buildSmartShareSummary,
@@ -132,7 +132,7 @@ describe("export image pipeline e2e (shipped)", () => {
       includeThoughts: false,
     });
     expect(model.messages.length).toBeGreaterThanOrEqual(3);
-    expect(model.footerText).toBe(GROK_APP_SHARE_FOOTER);
+    expect(model.footerText).toBe(SUPERCHARGE_APP_SHARE_FOOTER);
 
     const result = await buildExportImagePipeline({
       title: "周报整理",

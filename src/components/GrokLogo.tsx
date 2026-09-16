@@ -1,9 +1,12 @@
-import { IconGrokMark } from "@/components/icons";
+import { IconBolt } from "@/components/icons";
 
 /**
- * App brand mark — Grok glyph with fill=currentColor.
- * Inherits text color from parent so dark/light themes invert automatically.
+ * Supercharge product mark.
+ *
+ * The historical component name stays as an internal compatibility detail so
+ * existing imports do not need to churn while the visible product surface is
+ * provider-neutral.
  */
 export function GrokLogo({ size = 22 }: { size?: number }) {
-  return <IconGrokMark size={size} className="grok-logo" title="Grok" />;
+  return <IconBolt size={size} className="grok-logo" title="Supercharge" />;
 }

@@ -45,8 +45,7 @@ export function useWallpaperSourceHistory() {
 
   const save = useCallback(
     (source: WallpaperSourceKind, value: WallpaperSourceSnapshot) => {
-      // Saved-page rows remain owned by the isolated authenticated controller.
-      const items = source === "grok_album" ? [] : [...value.items];
+      const items = [...value.items];
       if (items.length > MAX_ITEMS_PER_SOURCE) {
         entries.current.delete(source);
         return;

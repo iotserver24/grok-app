@@ -152,7 +152,7 @@ fn collect_plugins_list() -> Result<Vec<PluginDto>, String> {
     parse_plugin_list_json(&stdout, &disabled, &inspect_extra)
 }
 
-/// List installed plugins (Grok Build inventory + enable state + inspect extras).
+/// List installed plugins (Supercharge inventory + enable state + inspect extras).
 /// Always returns Ok; on CLI missing / failure, `plugins` is empty and `error` is set.
 #[tauri::command]
 pub async fn plugins_list() -> Result<serde_json::Value, String> {
@@ -169,7 +169,7 @@ pub async fn plugins_list() -> Result<serde_json::Value, String> {
     }
 }
 
-/// Enable a plugin by name (`grok plugin enable <name>`). Soft-respawns agent.
+/// Enable a plugin by name (`supercharge plugin enable <name>`). Soft-respawns agent.
 #[tauri::command]
 pub async fn plugin_enable(
     app: tauri::AppHandle,
@@ -210,7 +210,7 @@ pub async fn plugin_enable(
     }))
 }
 
-/// Disable a plugin by name (`grok plugin disable <name>`). Soft-respawns agent.
+/// Disable a plugin by name (`supercharge plugin disable <name>`). Soft-respawns agent.
 #[tauri::command]
 pub async fn plugin_disable(
     app: tauri::AppHandle,
@@ -292,7 +292,7 @@ pub async fn plugin_uninstall(
     }))
 }
 
-/// Plugin component inventory text (`grok plugin details <name>`).
+/// Plugin component inventory text (`supercharge plugin details <name>`).
 #[tauri::command]
 pub async fn plugin_details(name: String) -> Result<serde_json::Value, String> {
     let name = name.trim().to_string();
@@ -456,7 +456,7 @@ pub fn plugin_name_from_install_source(source: &str) -> Option<String> {
 }
 
 /// Install from path / git URL / GitHub shorthand / marketplace name
-/// (`grok plugin install <source> --trust`), then enable, then soft-respawn.
+/// (`supercharge plugin install <source> --trust`), then enable, then soft-respawn.
 /// `--trust` is required for non-interactive UI; enable so skills/MCP load without a second step.
 #[tauri::command]
 pub async fn plugin_install(
@@ -541,7 +541,7 @@ pub async fn plugin_install(
     }))
 }
 
-/// Update one plugin by name, or all when `name` is null/empty (`grok plugin update [name]`).
+/// Update one plugin by name, or all when `name` is null/empty (`supercharge plugin update [name]`).
 /// Soft-respawns agent on success.
 #[tauri::command]
 pub async fn plugin_update(
@@ -578,7 +578,7 @@ pub async fn plugin_update(
     }))
 }
 
-// ── plugin validate (`grok plugin validate [path]`) ─────────────────────────
+// ── plugin validate (`supercharge plugin validate [path]`) ─────────────────────────
 
 /// Split stdout + stderr into non-empty lines (stderr first, de-duped).
 pub fn parse_plugin_validate_messages(stdout: &str, stderr: &str) -> Vec<String> {
@@ -718,7 +718,7 @@ pub fn resolve_plugin_validate_path(path_or_name: Option<&str>) -> Option<String
     }))
 }
 
-/// Validate a plugin manifest via `grok plugin validate [path]`.
+/// Validate a plugin manifest via `supercharge plugin validate [path]`.
 ///
 /// - `path_or_name`: local path, installed plugin name, or omit (CLI default `.`)
 /// - Always returns an envelope `{ ok, messages[] }` (never hard-fails on CLI-too-old)
@@ -765,7 +765,7 @@ pub async fn plugin_validate(
                     "ok": false,
                     "messages": [
                         format!(
-                            "This Grok CLI does not support `plugin validate`; version {} or newer is required. Run `grok update`, then fully restart the app.",
+                            "This Supercharge CLI does not support `plugin validate`; version {} or newer is required. Run `supercharge update`, then fully restart the app.",
                             crate::cli_probe::min_cli_version_str()
                         )
                     ],

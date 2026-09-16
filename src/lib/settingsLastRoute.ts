@@ -13,7 +13,7 @@ import {
   type SettingsTabId,
 } from "./settingsCatalog";
 
-export const SETTINGS_LAST_ROUTE_STORAGE_KEY = "grok.settingsLastRoute";
+export const SETTINGS_LAST_ROUTE_STORAGE_KEY = "supercharge.settingsLastRoute";
 
 export type SettingsLastRoute = {
   section: SettingsSectionId;

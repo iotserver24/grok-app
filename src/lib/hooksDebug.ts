@@ -22,7 +22,7 @@ export const HOOK_ACTIVITY_MAX = 30;
 export const HOOK_DETAIL_MAX = 160;
 
 /** localStorage key for the activity ring. */
-export const HOOK_ACTIVITY_STORAGE_KEY = "grok.hookActivity";
+export const HOOK_ACTIVITY_STORAGE_KEY = "supercharge.hookActivity";
 
 /** Fired on `window` after load/save/clear (detail = entries). */
 export const HOOK_ACTIVITY_CHANGE_EVENT = "grok-hook-activity-change";

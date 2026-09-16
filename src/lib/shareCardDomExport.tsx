@@ -30,11 +30,11 @@ import {
   type ShareCardSkinId,
 } from "@/lib/shareCardSkins";
 import type { ShareCardModel } from "@/lib/sessionExportImage";
-import { GROK_APP_SHARE_FOOTER } from "@/lib/sessionExportImage";
+import { SUPERCHARGE_APP_SHARE_FOOTER } from "@/lib/sessionExportImage";
 
 function roleLabel(role: string): string {
   if (role === "user") return "You";
-  if (role === "assistant") return "Grok";
+  if (role === "assistant") return "Supercharge";
   if (role === "tool") return "Tool";
   return role;
 }
@@ -537,7 +537,7 @@ function ShareCardExportView({
             fontFamily: metaFont,
           }}
         >
-          {model.footerText || GROK_APP_SHARE_FOOTER}
+          {model.footerText || SUPERCHARGE_APP_SHARE_FOOTER}
         </span>
       </footer>
     </article>

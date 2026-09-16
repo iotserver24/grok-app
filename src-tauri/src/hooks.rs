@@ -1,7 +1,7 @@
-//! Grok Build hooks discovery under `~/.grok/hooks` and `<project>/.grok/hooks`.
+//! Supercharge hooks discovery under `~/.grok/hooks` and `<project>/.grok/hooks`.
 //!
 //! Management is list / reveal / open-folder only — no visual JSON editor.
-//! Hook file format lives in the Grok Build user guide (`10-hooks.md`).
+//! Hook file format lives in the Supercharge user guide (`10-hooks.md`).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,7 +42,7 @@ pub struct HooksListResult {
     pub project_dir: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_dir_exists: Option<bool>,
-    /// Absolute path to the local Grok Build hooks user-guide page when present.
+    /// Absolute path to the local Supercharge hooks user-guide page when present.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub docs_path: Option<String>,
 }
@@ -223,7 +223,7 @@ pub fn ensure_hooks_dir(scope: &str, project_path: Option<&str>) -> Result<PathB
 
 // ── Try-run (real process, path-scoped to hooks dirs only) ───────────────────
 
-/// Default timeout for try-run (matches Grok Build hook default for most events).
+/// Default timeout for try-run (matches Supercharge hook default for most events).
 pub const HOOKS_TRY_DEFAULT_TIMEOUT_SECS: u64 = 5;
 /// Hard upper bound so the UI cannot hang the host.
 pub const HOOKS_TRY_MAX_TIMEOUT_SECS: u64 = 60;

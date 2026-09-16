@@ -233,7 +233,7 @@ export const IDLE_SNAPSHOT: SessionSnapshot = {
   state: "idle",
   lastError: null,
   streamingMessageId: null,
-  backend: "grok_agent_stdio",
+  backend: "supercharge_agent_stdio",
   modelId: null,
   projectPath: null,
   title: "",

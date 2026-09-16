@@ -48,9 +48,10 @@ fn handshake_initialize_params_match_fixture() {
         fx["expect"]["clientName"].as_str()
     );
     assert!(
-        actual["capabilities"].is_object(),
-        "capabilities must be object"
+        actual["clientCapabilities"].is_object(),
+        "clientCapabilities must be object"
     );
+    assert_eq!(actual["_meta"]["clientIdentifier"], "supercharge-desktop");
 
     // Sample agent result must advertise the same protocol version.
     assert_eq!(

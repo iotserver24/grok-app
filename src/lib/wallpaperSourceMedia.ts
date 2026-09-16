@@ -1,8 +1,4 @@
 import * as api from "@/lib/api";
-import {
-  cancelGrokAlbumMediaRequests,
-  fetchGrokAlbumMedia,
-} from "@/lib/grokAlbumMedia";
 import { createWallpaperRequestId } from "@/lib/wallpaperRequest";
 import {
   resolveApplySource,
@@ -18,7 +14,8 @@ import { clearRemoteWallpaperThumbnailCache } from "@/lib/remoteWallpaperThumbna
 export const EMPTY_WALLPAPER_IMAGE_PLACEHOLDER =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 
-export { cancelGrokAlbumMediaRequests };
+/** Legacy helper kept for dormant modules; no shipped UI starts album requests. */
+export function cancelGrokAlbumMediaRequests(): void {}
 
 export async function cancelRemoteWallpaperMediaRequests(): Promise<void> {
   clearRemoteWallpaperThumbnailCache();
@@ -93,11 +90,7 @@ export async function ensureLocalWallpaperMedia(
   }
 
   let fetched;
-  if (item.source === "grok_album") {
-    fetched = signal
-      ? await fetchGrokAlbumMedia(source.url, { signal })
-      : await fetchGrokAlbumMedia(source.url);
-  } else if (isWallpaperRemoteSource(item.source)) {
+  if (isWallpaperRemoteSource(item.source)) {
     const requestId = createWallpaperRequestId();
     fetched = await awaitAbortable(
       api.wallpaperRemoteFetchMedia(
@@ -109,13 +102,7 @@ export async function ensureLocalWallpaperMedia(
       () => api.wallpaperRemoteCancelMediaRequests([requestId]),
     );
   } else {
-    fetched = await awaitAbortable(
-      api.wallpaperFetchMedia(
-        source.url,
-        item.source === "imagine" ? "imagine" : "x",
-      ),
-      signal,
-    );
+    throw new Error("url_blocked");
   }
 
   throwIfAborted(signal);

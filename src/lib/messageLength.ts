@@ -5,7 +5,7 @@
  */
 
 /** Storage key for the Appearance “Show reply length” toggle. */
-export const SHOW_REPLY_LENGTH_STORAGE_KEY = "grok.showReplyLength";
+export const SHOW_REPLY_LENGTH_STORAGE_KEY = "supercharge.showReplyLength";
 
 /** Fired on `window` after a successful save (detail = boolean show). */
 export const SHOW_REPLY_LENGTH_CHANGE_EVENT = "grok-show-reply-length-change";

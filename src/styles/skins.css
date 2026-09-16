@@ -556,7 +556,7 @@ html[data-text-color="custom"]
 
 html[data-text-color="custom"]
   .composer-welcome-mark
-  :is(.deepseek-full-mark__ink, .opencode-wordmark, .supergrok-mark) {
+  :is(.deepseek-full-mark__ink, .opencode-wordmark, .grok-logo) {
   color: var(--appearance-chrome-ink);
   fill: var(--appearance-chrome-ink);
 }

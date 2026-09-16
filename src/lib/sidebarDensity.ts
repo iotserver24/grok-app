@@ -11,7 +11,7 @@
 
 export type SidebarDensity = "comfortable" | "compact";
 
-export const SIDEBAR_DENSITY_STORAGE_KEY = "grok.sidebarDensity";
+export const SIDEBAR_DENSITY_STORAGE_KEY = "supercharge.sidebarDensity";
 export const DEFAULT_SIDEBAR_DENSITY: SidebarDensity = "comfortable";
 export const SIDEBAR_DENSITY_ATTR = "data-sidebar-density";
 

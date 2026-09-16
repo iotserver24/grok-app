@@ -3,7 +3,7 @@
  * remount even when the in-memory liveMap row is gone.
  */
 
-const STORAGE_KEY = "grok-app.finishedAgentTurns";
+const STORAGE_KEY = "supercharge-app.finishedAgentTurns";
 const MAX_ENTRIES = 80;
 
 export type FinishedTurnsMap = Record<string, number>;

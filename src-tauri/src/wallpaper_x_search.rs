@@ -484,7 +484,7 @@ fn finish_cli(
         cli_duration_ms: Some(cli_duration_ms),
         cache_hit: false,
         continuation_id: None,
-        // Grok Build does not currently expose a reliable hosted X call count
+        // Supercharge does not currently expose a reliable hosted X call count
         // or selected official model through this headless result contract.
         search_calls: None,
         candidate_count: outcome.candidate_count,

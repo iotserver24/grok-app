@@ -2,7 +2,7 @@
  * Conversation → share-card PNG (Claude/ChatGPT-style export image).
  *
  * Pure builders for card model + offscreen DOM; rasterization uses canvas
- * (no runtime CDN). Footer always credits "Generated with Grok App".
+ * (no runtime CDN). Footer always credits "Generated with Supercharge".
  */
 
 import { escapeHtml, type ExportableMessage } from "@/lib/sessionExport";
@@ -30,7 +30,7 @@ import {
   type Attachment,
 } from "@/lib/attachments";
 
-export const GROK_APP_SHARE_FOOTER = "Generated with Grok App";
+export const SUPERCHARGE_APP_SHARE_FOOTER = "Generated with Supercharge";
 
 /** One body block inside a full-transcript share message. */
 export type ShareCardBodyPart =
@@ -78,7 +78,7 @@ export type ShareCardInput = {
   maxMessages?: number;
   /** Max chars per message body (default 4000). */
   maxBodyChars?: number;
-  /** Footer line (default {@link GROK_APP_SHARE_FOOTER}). */
+  /** Footer line (default {@link SUPERCHARGE_APP_SHARE_FOOTER}). */
   footerText?: string;
   /** Card width in CSS px (default 720). */
   widthPx?: number;
@@ -107,7 +107,7 @@ const DEFAULT_WIDTH = 720;
 
 function roleLabel(role: string): string {
   if (role === "user") return "You";
-  if (role === "assistant") return "Grok";
+  if (role === "assistant") return "Supercharge";
   if (role === "tool") return "Tool";
   return role;
 }
@@ -377,7 +377,7 @@ export function buildShareCardModel(input: ShareCardInput): ShareCardModel {
     locale: (input.locale || "en").trim() || "en",
     logoDataUrl: input.logoDataUrl?.trim() || null,
     includeThoughts,
-    footerText: (input.footerText || GROK_APP_SHARE_FOOTER).trim(),
+    footerText: (input.footerText || SUPERCHARGE_APP_SHARE_FOOTER).trim(),
     widthPx,
     truncatedCount,
   };
@@ -396,7 +396,7 @@ export function sessionExportImageFilename(
     .slice(0, 48);
   const id = (sessionId || "").slice(0, 8);
   const name = base || "session";
-  return id ? `grok-${name}-${id}.png` : `grok-${name}.png`;
+  return id ? `supercharge-${name}-${id}.png` : `supercharge-${name}.png`;
 }
 
 /**
@@ -794,7 +794,7 @@ export async function rasterizeShareCardPng(
       m.role === "user"
         ? "You"
         : m.role === "assistant"
-          ? "Grok"
+          ? "Supercharge"
           : m.role === "tool"
             ? "Tool"
             : m.role;
@@ -1161,7 +1161,7 @@ export async function rasterizeSmartShareCardPng(
   const pixelRatio = opts?.pixelRatio ?? 2;
   const width = opts?.widthPx ?? 720;
   const theme = summary.theme;
-  const footerText = (opts?.footerText || GROK_APP_SHARE_FOOTER).trim();
+  const footerText = (opts?.footerText || SUPERCHARGE_APP_SHARE_FOOTER).trim();
   const exportedAt = (opts?.exportedAt || new Date().toISOString())
     .slice(0, 19)
     .replace("T", " ");

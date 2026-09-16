@@ -58,9 +58,8 @@ pub struct ComposerPrefs {
 impl Default for ComposerPrefs {
     fn default() -> Self {
         Self {
-            model_id: "grok-4.6".into(),
-            // Grok 4.6 product default (Extra High).
-            effort: "xhigh".into(),
+            model_id: String::new(),
+            effort: DEFAULT_REASONING_EFFORT.into(),
             mode: "agent".into(),
             permission_policy: "ask".into(),
             scope: "global".into(),
@@ -259,7 +258,7 @@ pub struct SessionMeta {
     pub mode: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub permission_policy: Option<String>,
-    /// Optional JSON Schema for structured model output (`grok --json-schema`).
+    /// Optional JSON Schema for structured model output (`supercharge --json-schema`).
     /// Empty / unset → no constraint. Validated on the client before save.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub json_schema: Option<String>,
@@ -279,7 +278,7 @@ pub struct SessionMeta {
     /// (repeatable). Does not change global Extensions / `~/.grok` plugins.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub plugin_dirs: Vec<String>,
-    /// Optional per-session extra rules appended via top-level `grok --rules`.
+    /// Optional per-session extra rules appended via top-level `supercharge --rules`.
     /// Empty / unset → no flag. Soft-respawn reloads on change.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extra_rules: Option<String>,
@@ -288,7 +287,7 @@ pub struct SessionMeta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_agent_turns: Option<u32>,
     /// Optional per-session system prompt override via top-level
-    /// `grok --system-prompt-override` (alias `--system-prompt`).
+    /// `supercharge --system-prompt-override` (alias `--system-prompt`).
     /// Empty / unset → no flag. Soft-respawn reloads on change.
     /// Never log the full value (may contain secrets / PII).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -389,7 +388,7 @@ pub struct AppSettings {
     pub store_api_keys_in_keychain: bool,
     /// OS-level sandbox profile for spawned `grok agent` processes
     /// (`off` | `workspace` | `read-only` | `strict` | `devbox`). Default off.
-    /// Passed as top-level `grok --sandbox <profile>` / `GROK_SANDBOX` at spawn.
+    /// Passed as top-level `supercharge --sandbox <profile>` / `GROK_SANDBOX` at spawn.
     #[serde(default = "default_sandbox_profile")]
     pub sandbox_profile: String,
     /// Show multi-root workspace UI (#1194). Default **true** (MVP-0 declare roots).
@@ -398,12 +397,12 @@ pub struct AppSettings {
     /// Last workspace id used when starting a new chat (optional hint).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recent_workspace_id: Option<String>,
-    /// Enable Grok Build cross-session memory (`--experimental-memory` / `GROK_MEMORY=1`
+    /// Enable Supercharge cross-session memory (`--experimental-memory` / `GROK_MEMORY=1`
     /// / `[memory] enabled`). Default **false** — experimental; when off, spawn forces
     /// `--no-memory` + `GROK_MEMORY=0` for isolation (esp. independent mode).
     #[serde(default)]
     pub experimental_memory: bool,
-    /// Grok Build compaction mode (CLI 0.2.117+): `summary` | `transcript` | `segments`.
+    /// Supercharge compaction mode (CLI 0.2.117+): `summary` | `transcript` | `segments`.
     /// Passed as top-level `--compaction-mode` / `GROK_COMPACTION_MODE` at spawn.
     /// Default `summary` (CLI default). Soft-respawns on change.
     #[serde(default = "default_compaction_mode")]
@@ -419,7 +418,7 @@ pub struct AppSettings {
     /// key; spawn sets env (soft-fail when CLI is known older). Soft-respawns.
     #[serde(default)]
     pub two_pass_compaction_enabled: bool,
-    /// Cap agent turns per process via top-level `grok --max-turns N`.
+    /// Cap agent turns per process via top-level `supercharge --max-turns N`.
     /// `None` or `0` = omit the flag (CLI default / unlimited).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_agent_turns: Option<u32>,
@@ -463,12 +462,12 @@ pub struct AppSettings {
     /// Per-session override: [`SessionMeta::no_ask_user`].
     #[serde(default)]
     pub no_ask_user: bool,
-    /// Built-in tool ids to deny via top-level `grok --disallowed-tools a,b`.
+    /// Built-in tool ids to deny via top-level `supercharge --disallowed-tools a,b`.
     /// Default empty (CLI default — all tools available). Coexists with
     /// [`Self::disable_web_search`]; changing the list soft-respawns agents.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub disallowed_tools: Vec<String>,
-    /// Built-in tool ids to allow via top-level `grok --tools a,b`.
+    /// Built-in tool ids to allow via top-level `supercharge --tools a,b`.
     /// Default empty = omit flag (CLI default — all tools). When non-empty,
     /// restricts the agent to the listed tools. Coexists with
     /// [`Self::disallowed_tools`] (allowlist restricts; denylist still applies).
@@ -517,14 +516,17 @@ pub struct AppSettings {
     /// (reopen-last-session defaulted to false). Existing installs run this once.
     #[serde(default)]
     pub startup_new_chat_default_migrated: bool,
-    /// One-shot: product effort default medium → high (Grok Build 1.0 align).
+    /// One-shot: product effort default medium → high (Supercharge 1.0 align).
     /// Missing field deserializes as false so existing installs migrate once.
     #[serde(default)]
     pub effort_default_migrated: bool,
-    /// One-shot: product official default grok-4.5 → grok-4.6.
-    /// Missing field deserializes as false so existing installs migrate once.
+    /// Legacy upstream migration marker retained for settings compatibility.
     #[serde(default)]
     pub official_model_default_migrated: bool,
+    /// One-shot: clear model defaults injected by the upstream Grok app so the
+    /// Supercharge catalog chooses its configured/live default.
+    #[serde(default)]
+    pub supercharge_model_default_migrated: bool,
     /// One-shot: official grok-4.6 product effort high → xhigh.
     #[serde(default)]
     pub official_effort_xhigh_migrated: bool,
@@ -539,7 +541,7 @@ pub struct AppSettings {
     /// top-level `--no-plan` so plan mode is disabled for that process.
     #[serde(default = "default_plan_enabled")]
     pub plan_enabled: bool,
-    /// Allow Grok Build subagent spawning (`Agent` / task tools). Default **true**
+    /// Allow Supercharge subagent spawning (`Agent` / task tools). Default **true**
     /// (CLI default). When false, spawn forces `--no-subagents` + `GROK_SUBAGENTS=0`
     /// and independent mode writes `[subagents] enabled = false`.
     #[serde(default = "default_true")]
@@ -550,7 +552,7 @@ pub struct AppSettings {
     /// key; spawn sets env (soft-fail when CLI is known older). Soft-respawns.
     #[serde(default)]
     pub subagent_worktree_snapshot_enabled: bool,
-    /// Enable CLI auto-wake (`[features].auto_wake`): when on, Grok Build may
+    /// Enable CLI auto-wake (`[features].auto_wake`): when on, Supercharge may
     /// inject a synthetic turn after background work completes (bash / monitor /
     /// task / loop). Default **false** (opt-in). Independent mode writes
     /// agent-home `auto_wake_enabled` + `[features].auto_wake`. Shared mode
@@ -559,32 +561,32 @@ pub struct AppSettings {
     /// overlay / key (soft-fail).
     #[serde(default)]
     pub auto_wake_enabled: bool,
-    /// Enable Grok Build workflows (`workflows_enabled` in agent-home config.toml).
-    /// Default **true** (aligned with Grok Build CLI ≥0.2.111 / 1.0). Workflows are
+    /// Enable Supercharge workflows (`workflows_enabled` in agent-home config.toml).
+    /// Default **true** (aligned with Supercharge CLI ≥0.2.111 / 1.0). Workflows are
     /// Rhai scripts under `~/.grok/workflows` / project `.grok/workflows` run by the
     /// CLI `workflow` tool. App lists names + headless smoke/run; no visual editor.
     /// Independent mode writes the top-level key; shared mode does not rewrite
     /// `~/.grok`. Soft-respawns on change.
     #[serde(default = "default_true")]
     pub workflows_enabled: bool,
-    /// Preferred Grok Build agent definition for new agent processes
+    /// Preferred Supercharge agent definition for new agent processes
     /// (`explore` / `plan` / `general-purpose` / custom name under `~/.grok/agents`).
     /// Empty / `default` / `none` → omit top-level `--agent` (CLI default).
     /// Applied at spawn only; changing it soft-respawns the live agent.
     #[serde(default)]
     pub preferred_agent: String,
-    /// Optional path to a Grok Build agent profile file
+    /// Optional path to a Supercharge agent profile file
     /// (`grok agent --agent-profile <PATH>`). Empty → omit the flag.
     /// Spawn-time only; does not rewrite shared `~/.grok`. Soft-respawns on change.
     #[serde(default)]
     pub agent_profile_path: String,
     /// Optional inline subagent definitions JSON for top-level
-    /// `grok --agents <JSON>`. Empty → omit the flag. Must be a JSON object map
+    /// `supercharge --agents <JSON>`. Empty → omit the flag. Must be a JSON object map
     /// when set; invalid values are rejected on save. Spawn-time only — does
     /// not write into shared `~/.grok`. Soft-respawns on change.
     #[serde(default)]
     pub agents_json: String,
-    /// Connect local ACP agents to a shared Grok Build leader process
+    /// Connect local ACP agents to a shared Supercharge leader process
     /// (`grok agent --leader`). Default **false** — each agent is a standalone
     /// process (`--no-leader`). Advanced; multiple clients can share one backend.
     #[serde(default)]
@@ -828,7 +830,7 @@ impl Default for AppSettings {
             // Follow OS language (zh / zh-TW / en). Users can lock a catalog in Settings.
             locale: default_locale(),
             locale_follow_system_migrated: true,
-            // Product default: share GROK_HOME (~/.grok) with terminal Grok Build CLI.
+            // Product default: share SUPERCHARGE_HOME (~/.supercharge) with the CLI.
             // Existing installs keep whatever is already persisted in settings.json.
             session_data_mode: "shared".into(),
             manual_cli_path: None,
@@ -836,8 +838,8 @@ impl Default for AppSettings {
             wsl_distro: None,
             wsl_cli_path: None,
             permission_policy: "ask".into(),
-            model_id: Some("grok-4.6".into()),
-            effort: Some("xhigh".into()),
+            model_id: None,
+            effort: Some(DEFAULT_REASONING_EFFORT.into()),
             mode: "agent".into(),
             onboarding_done: false,
             setup_skipped: false,
@@ -866,7 +868,7 @@ impl Default for AppSettings {
             background_wait_timeout_sec: default_background_wait_timeout_sec(),
             include_partial_messages: false,
             disable_web_search: false,
-            official_aux_inject: true,
+            official_aux_inject: false,
             official_aux_with_user_mcp: false,
             no_ask_user: false,
             disallowed_tools: Vec::new(),
@@ -886,6 +888,7 @@ impl Default for AppSettings {
             // Fresh installs already use 1.0-aligned effort / workflows defaults.
             effort_default_migrated: true,
             official_model_default_migrated: true,
+            supercharge_model_default_migrated: true,
             official_effort_xhigh_migrated: true,
             official_effort_xhigh_rows_migrated: true,
             workflows_default_migrated: true,
@@ -902,7 +905,7 @@ impl Default for AppSettings {
             voice_id: default_voice_id(),
             voice_dictation_auto_send: false,
             voice_keep_agents_on_end: true,
-            stt_engine: default_stt_engine(),
+            stt_engine: "custom".into(),
             stt_custom_base_url: None,
             stt_custom_model: None,
             stt_custom_language: None,
@@ -1113,12 +1116,12 @@ pub fn load_settings() -> AppSettings {
         tracing::info!("settings migration: reopenLastSession → false (start on new chat)");
         let _ = write_json(&settings_file(), &s);
     }
-    // One-time: Grok Build 1.0 effort default medium → high. Unset / empty /
+    // One-time: Supercharge 1.0 effort default medium → high. Unset / empty /
     // legacy product default medium lift to high; deliberate low/high/max kept.
     if !s.effort_default_migrated {
         if let Some(next) = migrate_legacy_effort_default(s.effort.as_deref()) {
             tracing::info!(
-                "settings migration: effort {:?} → {} (Grok Build 1.0 default)",
+                "settings migration: effort {:?} → {} (Supercharge 1.0 default)",
                 s.effort,
                 next
             );
@@ -1127,39 +1130,38 @@ pub fn load_settings() -> AppSettings {
         s.effort_default_migrated = true;
         let _ = write_json(&settings_file(), &s);
     }
-    // One-time: official catalog default grok-4.5 → grok-4.6. Unset / empty /
-    // legacy product default grok-4.5 lift; deliberate other ids kept.
+    // The upstream migration is retired in Supercharge. Mark it complete without
+    // inventing or rewriting a model; the live/cache catalog is authoritative.
     if !s.official_model_default_migrated {
-        if let Some(next) = migrate_legacy_official_model_default(s.model_id.as_deref()) {
-            tracing::info!(
-                "settings migration: modelId {:?} → {} (Grok 4.6 default)",
-                s.model_id,
-                next
-            );
-            s.model_id = Some(next);
-        }
         s.official_model_default_migrated = true;
         let _ = write_json(&settings_file(), &s);
     }
-    // One-time: official 4.6 product effort high → xhigh. Unset / empty / the
-    // previous product default high lift; deliberate low/medium/max stay.
-    // Skip custom-provider route ids (not grok-* / empty).
-    if !s.official_effort_xhigh_migrated {
-        if official_route_should_default_xhigh(s.model_id.as_deref()) {
-            if let Some(next) = migrate_official_effort_to_xhigh(s.effort.as_deref()) {
-                tracing::info!(
-                    "settings migration: effort {:?} → {} (Grok 4.6 default)",
-                    s.effort,
-                    next
-                );
-                s.effort = Some(next);
+    // One-time compatibility cleanup: old app builds injected Grok product
+    // defaults into otherwise unset preferences. Clear only those known factory
+    // values so the Supercharge live/cache catalog can choose its own default;
+    // preserve every other explicit user selection.
+    if !s.supercharge_model_default_migrated {
+        if clear_legacy_grok_model_default(s.model_id.as_deref()) {
+            tracing::info!(
+                "settings migration: cleared legacy Grok model default {:?}",
+                s.model_id
+            );
+            s.model_id = None;
+            if s.effort.as_deref().map(str::trim) == Some("xhigh") {
+                s.effort = Some(DEFAULT_REASONING_EFFORT.into());
             }
         }
+        clear_legacy_grok_model_rows();
+        s.supercharge_model_default_migrated = true;
+        let _ = write_json(&settings_file(), &s);
+    }
+    // Retire upstream Grok-specific effort migrations. Model-specific effort
+    // defaults now come from the Supercharge catalog instead.
+    if !s.official_effort_xhigh_migrated {
         s.official_effort_xhigh_migrated = true;
         let _ = write_json(&settings_file(), &s);
     }
     if !s.official_effort_xhigh_rows_migrated {
-        migrate_official_effort_xhigh_rows(s.model_id.as_deref());
         s.official_effort_xhigh_rows_migrated = true;
         let _ = write_json(&settings_file(), &s);
     }
@@ -1193,7 +1195,7 @@ pub fn load_settings() -> AppSettings {
     s
 }
 
-/// Product default effort for cold start / fallback (Grok Build 1.0 = high).
+/// Product default effort for cold start / fallback (Supercharge 1.0 = high).
 pub const DEFAULT_REASONING_EFFORT: &str = "high";
 
 /// One-shot effort migration: lift unset / empty / legacy `"medium"` product
@@ -1208,16 +1210,45 @@ pub fn migrate_legacy_effort_default(stored: Option<&str>) -> Option<String> {
     }
 }
 
-/// Product default official catalog model (Grok 4.6, 2026-08).
-pub const DEFAULT_OFFICIAL_MODEL_ID: &str = "grok-4.6";
+/// Whether a stored model is one of the Grok defaults injected by the upstream
+/// app rather than an explicit Supercharge choice.
+pub fn clear_legacy_grok_model_default(stored: Option<&str>) -> bool {
+    matches!(
+        stored.map(str::trim).filter(|s| !s.is_empty()),
+        Some("grok-4.5" | "grok-4.6")
+    )
+}
 
-/// One-shot official-model migration: lift unset / empty / legacy `"grok-4.5"`
-/// product default to [`DEFAULT_OFFICIAL_MODEL_ID`]. Explicit other ids stay.
-pub fn migrate_legacy_official_model_default(stored: Option<&str>) -> Option<String> {
-    match stored.map(str::trim).filter(|s| !s.is_empty()) {
-        None => Some(DEFAULT_OFFICIAL_MODEL_ID.into()),
-        Some("grok-4.5") => Some(DEFAULT_OFFICIAL_MODEL_ID.into()),
-        Some(_) => None,
+fn clear_legacy_grok_model_rows() {
+    if let Err(error) = update_sessions_index(|sessions| {
+        for session in sessions {
+            if clear_legacy_grok_model_default(session.model_id.as_deref()) {
+                session.model_id = None;
+                if session.effort.as_deref().map(str::trim) == Some("xhigh") {
+                    session.effort = None;
+                }
+            }
+        }
+        Ok(())
+    }) {
+        tracing::warn!("model row migration: sessions_index: {error}");
+    }
+
+    let mut projects = load_projects();
+    let mut changed = false;
+    for project in &mut projects {
+        if clear_legacy_grok_model_default(project.model_id.as_deref()) {
+            project.model_id = None;
+            if project.effort.as_deref().map(str::trim) == Some("xhigh") {
+                project.effort = None;
+            }
+            changed = true;
+        }
+    }
+    if changed {
+        if let Err(error) = write_json(&projects_file(), &projects) {
+            tracing::warn!("model row migration: projects: {error}");
+        }
     }
 }
 
@@ -2213,7 +2244,7 @@ pub fn sanitize_system_prompt_override(raw: Option<String>) -> Option<String> {
     }
 }
 
-/// Set or clear per-session extra rules (`grok --rules` on next spawn).
+/// Set or clear per-session extra rules (`supercharge --rules` on next spawn).
 /// Pass `None` or empty/whitespace to clear.
 pub fn set_session_extra_rules(
     id: &str,
@@ -2227,7 +2258,7 @@ pub fn set_session_extra_rules(
     })
 }
 
-/// Set or clear per-session max agent turns (`grok --max-turns` on next spawn).
+/// Set or clear per-session max agent turns (`supercharge --max-turns` on next spawn).
 ///
 /// Pass `None` or `0` to clear (inherit global settings). Values are clamped to 1–200
 /// via [`crate::acp_client::normalize_max_agent_turns`].
@@ -2244,7 +2275,7 @@ pub fn set_session_max_agent_turns(
 }
 
 /// Set or clear per-session system prompt override
-/// (`grok --system-prompt-override` on next spawn).
+/// (`supercharge --system-prompt-override` on next spawn).
 /// Pass `None` or empty/whitespace to clear. Soft-respawn is handled by the command.
 /// Set or clear per-session `--no-ask-user` override.
 /// `None` inherits global `AppSettings.no_ask_user`.
@@ -3068,7 +3099,7 @@ fn global_prefs(settings: &AppSettings) -> (String, String, String, String) {
             .model_id
             .clone()
             .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| "grok-4.6".into()),
+            .unwrap_or_else(|| crate::models_catalog::list_available_models().default_model_id),
         settings
             .effort
             .clone()
@@ -3681,9 +3712,10 @@ mod tests {
         assert!(s.workflows_enabled);
         assert!(s.effort_default_migrated);
         assert!(s.official_model_default_migrated);
+        assert!(s.supercharge_model_default_migrated);
         assert!(s.workflows_default_migrated);
-        assert_eq!(s.effort.as_deref(), Some("xhigh"));
-        assert_eq!(s.model_id.as_deref(), Some("grok-4.6"));
+        assert_eq!(s.effort.as_deref(), Some("high"));
+        assert_eq!(s.model_id, None);
         assert!(s.official_effort_xhigh_migrated);
         assert!(s.official_effort_xhigh_rows_migrated);
         assert_eq!(s.preferred_agent, "");
@@ -3709,27 +3741,13 @@ mod tests {
     }
 
     #[test]
-    fn migrate_legacy_official_model_lifts_4_5_and_unset() {
-        assert_eq!(
-            migrate_legacy_official_model_default(None).as_deref(),
-            Some("grok-4.6")
-        );
-        assert_eq!(
-            migrate_legacy_official_model_default(Some("")).as_deref(),
-            Some("grok-4.6")
-        );
-        assert_eq!(
-            migrate_legacy_official_model_default(Some("  grok-4.5  ")).as_deref(),
-            Some("grok-4.6")
-        );
-        assert_eq!(
-            migrate_legacy_official_model_default(Some("grok-4.6")),
-            None
-        );
-        assert_eq!(
-            migrate_legacy_official_model_default(Some("custom-relay")),
-            None
-        );
+    fn legacy_grok_model_defaults_are_cleared_without_touching_other_models() {
+        assert!(!clear_legacy_grok_model_default(None));
+        assert!(!clear_legacy_grok_model_default(Some("")));
+        assert!(clear_legacy_grok_model_default(Some("  grok-4.5  ")));
+        assert!(clear_legacy_grok_model_default(Some("grok-4.6")));
+        assert!(!clear_legacy_grok_model_default(Some("gpt-6-astra")));
+        assert!(!clear_legacy_grok_model_default(Some("custom-relay")));
     }
 
     #[test]
@@ -4828,7 +4846,7 @@ mod tests {
         assert_eq!(resolve_composer_prefs(None, Some(&a.id)).effort, "low");
         assert_eq!(resolve_composer_prefs(None, Some(&b.id)).effort, "max");
         // The global seed for future chats is left untouched by a per-chat change.
-        assert_eq!(load_settings().effort.as_deref(), Some("xhigh"));
+        assert_eq!(load_settings().effort.as_deref(), Some("high"));
 
         let _ = delete_session(&a.id);
         let _ = delete_session(&b.id);

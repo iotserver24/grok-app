@@ -163,7 +163,7 @@ fn title_prompt(snippet: &str, locale: Locale) -> String {
     }
 }
 
-/// Call Grok CLI headless with low effort.
+/// Call Supercharge CLI headless with low effort.
 fn llm_title_via_cli(message: &str) -> Option<String> {
     // Same settings path as other CLI call sites (doctor, session spawn, etc.).
     let settings = store::load_settings();
@@ -172,7 +172,7 @@ fn llm_title_via_cli(message: &str) -> Option<String> {
     let snippet: String = message.chars().take(400).collect();
     let prompt = title_prompt(&snippet, tray_i18n::app_locale());
 
-    // Grok Build counts reasoning + answer as separate turns for some models;
+    // Supercharge counts reasoning + answer as separate turns for some models;
     // `--max-turns 1` exits with "Max turns reached" and never prints a title.
     // Use 2, disable tools/subagents so the reply is plain text only.
     let mut cmd = Command::new(&path);

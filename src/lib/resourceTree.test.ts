@@ -88,7 +88,7 @@ describe("clampTreeWidth / persistTreeWidth / loadTreeWidth", () => {
   });
 
   it("loadTreeWidth falls back on garbage", () => {
-    const s = memStorage({ "grok-app.resourceTreeWidth": "nope" });
+    const s = memStorage({ "supercharge-app.resourceTreeWidth": "nope" });
     expect(loadTreeWidth(s)).toBe(TREE_WIDTH_DEFAULT);
   });
 });

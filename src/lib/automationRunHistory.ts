@@ -41,7 +41,7 @@ export type AutomationRunRecord = {
 
 export type AutomationRunOutcomeFilter = "all" | AutomationRunOutcome;
 
-export const AUTOMATION_RUN_HISTORY_STORAGE_KEY = "grok.automationRunHistory";
+export const AUTOMATION_RUN_HISTORY_STORAGE_KEY = "supercharge.automationRunHistory";
 export const AUTOMATION_RUN_HISTORY_MAX = 50;
 /** Cap redacted error text in storage / UI. */
 export const AUTOMATION_RUN_ERROR_MAX = 280;

@@ -5,7 +5,7 @@
  */
 
 export const TRANSCRIPT_SELECTION_TOOLBAR_STORAGE_KEY =
-  "grok.transcriptSelectionToolbar";
+  "supercharge.transcriptSelectionToolbar";
 
 /** Fired on `window` after a successful save (detail = boolean enabled). */
 export const TRANSCRIPT_SELECTION_TOOLBAR_CHANGE_EVENT =

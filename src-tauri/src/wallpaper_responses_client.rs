@@ -1,4 +1,4 @@
-//! Shared Host-only client for fixed Grok Build Responses side routes.
+//! Shared Host-only client for fixed Supercharge Responses side routes.
 
 use std::collections::HashSet;
 use std::time::Duration;
@@ -167,7 +167,7 @@ impl ResponsesClient {
     }
 }
 
-/// Apply the fixed identity and OAuth-routing headers used by Grok Build for
+/// Apply the fixed identity and OAuth-routing headers used by Supercharge for
 /// authenticated cli-chat-proxy requests. Keep side routes on this helper so
 /// new Responses callers cannot silently drift from the official contract.
 pub(crate) fn apply_build_proxy_headers(

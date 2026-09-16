@@ -12,7 +12,7 @@ pub(super) fn tool_failure(update: &Value, tool: &str) -> &'static str {
     let Some(message) = output.get("message").and_then(Value::as_str) else {
         return "imagine_failed";
     };
-    // The official image-to-video tool refuses requests while Grok Build's
+    // The official image-to-video tool refuses requests while Supercharge's
     // zero-data-retention mode is enabled. This is a tool-owned prefix, so it
     // is safe to classify without interpreting arbitrary model text or bodies.
     if tool == "image_to_video"
@@ -39,7 +39,7 @@ pub(super) fn tool_failure(update: &Value, tool: &str) -> &'static str {
     }) {
         return "imagine_network_failed";
     }
-    // Grok Build's ACP adapter drops ToolError.details and retains Display only.
+    // Supercharge's ACP adapter drops ToolError.details and retains Display only.
     // Match the tool-owned prefix and status, ignoring the untrusted HTTP body.
     let prefixes: &[&str] = match tool {
         "image_gen" => &["Image generation failed with HTTP "],

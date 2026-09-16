@@ -1,5 +1,5 @@
 /**
- * Full-screen first-run gate: install Grok Build (required) → account (skippable) → enter home.
+ * Full-screen first-run gate: install Supercharge CLI (required) → provider (skippable) → enter home.
  * No page scrollbars; content is centered and compact.
  *
  * Honesty (SETUP-GATE-PRO): CLI is hard-required; account is soft/skippable.
@@ -48,7 +48,7 @@ export type SetupCliInfo = {
 };
 
 type Step = SetupWizardStep;
-type AccountPanel = "menu" | "key" | "relay";
+type AccountPanel = "menu" | "relay";
 
 type Props = {
   tr: Tr;
@@ -56,7 +56,6 @@ type Props = {
   useCustomWindowChrome: boolean;
   initialCli: SetupCliInfo;
   onComplete: (cli: SetupCliInfo) => void;
-  onAccountLoginOauth: () => Promise<boolean>;
 };
 
 export function SetupWizard({
@@ -65,7 +64,6 @@ export function SetupWizard({
   useCustomWindowChrome,
   initialCli,
   onComplete,
-  onAccountLoginOauth,
 }: Props) {
   const [step, setStep] = useState<Step>(() =>
     resolveInitialWizardStep(initialCli.found),
@@ -88,7 +86,6 @@ export function SetupWizard({
     () => initialCli.cliAuthPresent,
   );
   const [authDeferred, setAuthDeferred] = useState(false);
-  const [officialKey, setOfficialKey] = useState("");
   const [relayBase, setRelayBase] = useState("");
   const [relayKey, setRelayKey] = useState("");
   /** Default: OpenAI Responses — preferred for modern gateways. */
@@ -274,7 +271,9 @@ export function SetupWizard({
   }, [installCmds, reportError, tr]);
 
   const openDocs = useCallback(() => {
-    const url = installCmds?.docsUrl || "https://docs.x.ai/build/overview";
+    const url =
+      installCmds?.docsUrl ||
+      "https://github.com/iotserver24/supercharge-releases";
     void api.openExternalUrl(url).catch((e) => reportError(e));
   }, [installCmds, reportError]);
 
@@ -313,24 +312,6 @@ export function SetupWizard({
     setStep("ready");
   }, []);
 
-  const saveOfficialKey = useCallback(async () => {
-    const key = officialKey.trim();
-    if (!key) return;
-    setAccountBusy(true);
-    clearError();
-    try {
-      await api.secretsSet({ officialApiKey: key });
-      setAuthOk(true);
-      setStatusMsg(tr("setup.account.ok"));
-      setAccountPanel("menu");
-      setStep("ready");
-    } catch (e) {
-      reportError(e);
-    } finally {
-      setAccountBusy(false);
-    }
-  }, [clearError, officialKey, reportError, tr]);
-
   const saveRelay = useCallback(async () => {
     const base = relayBase.trim();
     const key = relayKey.trim();
@@ -345,7 +326,7 @@ export function SetupWizard({
         id: "relay",
         model: "default",
         baseUrl: base,
-        name: "Custom relay",
+        name: "Custom provider",
         apiKey: key,
         apiBackend: relayBackend || "responses",
         setAsDefault: true,
@@ -377,74 +358,6 @@ export function SetupWizard({
       setAccountBusy(false);
     }
   }, [clearError, relayBase, relayKey, relayBackend, reportError, tr]);
-
-  const runOauth = useCallback(async () => {
-    setAccountBusy(true);
-    clearError();
-    try {
-      const ok = await onAccountLoginOauth();
-      if (ok) {
-        setAuthOk(true);
-        setStatusMsg(tr("setup.account.ok"));
-        setStep("ready");
-      }
-      const next = await recheck(cli.path);
-      if (next?.cliAuthPresent) {
-        setAuthOk(true);
-        setStep("ready");
-      }
-    } catch (e) {
-      reportError(e);
-    } finally {
-      setAccountBusy(false);
-    }
-  }, [clearError, cli.path, onAccountLoginOauth, recheck, reportError, tr]);
-
-  const importCli = useCallback(async () => {
-    setAccountBusy(true);
-    clearError();
-    try {
-      const r = await api.importGrokCli();
-      if ((r as { ok?: boolean }).ok) {
-        setAuthOk(true);
-        setStatusMsg(tr("setup.account.ok"));
-        setStep("ready");
-      } else {
-        setStatusMsg(JSON.stringify((r as { messages?: string[] }).messages || r));
-      }
-    } catch (e) {
-      reportError(e);
-    } finally {
-      setAccountBusy(false);
-    }
-  }, [clearError, reportError, tr]);
-
-  const importGo = useCallback(async () => {
-    setAccountBusy(true);
-    clearError();
-    try {
-      await api.importGrokGo();
-      setAuthOk(true);
-      setStatusMsg(tr("setup.account.ok"));
-      setStep("ready");
-    } catch (e) {
-      reportError(e);
-    } finally {
-      setAccountBusy(false);
-    }
-  }, [clearError, reportError, tr]);
-
-  /** Abort the running login (OAuth/device) and unlock the UI immediately.
-   *  The backend kills the `grok login` child; the pending handler's `finally`
-   *  also clears accountBusy, but we reset here so the UI is instant. */
-  const cancelAccountLogin = useCallback(async () => {
-    try {
-      await api.accountLoginCancel();
-    } catch {
-      /* host may be unavailable; still unlock UI below */
-    }
-    setAccountBusy(false);
-  }, []);
 
   const percent = useMemo(
     () => clampInstallPercent(progress?.percent, installing),
@@ -689,7 +602,11 @@ export function SetupWizard({
                       type="button"
                       className="setup-entry setup-entry--recommended"
                       disabled={accountBusy}
-                      onClick={() => void importCli()}
+                      onClick={() => {
+                        setAuthOk(true);
+                        setStatusMsg(tr("setup.account.ok"));
+                        setStep("ready");
+                      }}
                     >
                       <strong>{tr("setup.reuseCliAuthTitle")}</strong>
                       <span>{tr("setup.reuseCliAuthDesc")}</span>
@@ -699,68 +616,11 @@ export function SetupWizard({
                     type="button"
                     className="setup-entry"
                     disabled={accountBusy}
-                    onClick={() => void runOauth()}
-                  >
-                    <strong>{tr("setup.account.oauth")}</strong>
-                    <span>{tr("setup.account.oauthHint")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="setup-entry"
-                    disabled={accountBusy}
-                    onClick={() => setAccountPanel("key")}
-                  >
-                    <strong>{tr("setup.account.key")}</strong>
-                    <span>{tr("setup.account.keyHint")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="setup-entry"
-                    disabled={accountBusy}
                     onClick={() => setAccountPanel("relay")}
                   >
                     <strong>{tr("setup.account.relay")}</strong>
                     <span>{tr("setup.account.relayHint")}</span>
                   </button>
-                  <button
-                    type="button"
-                    className="setup-entry"
-                    disabled={accountBusy}
-                    onClick={() => void importGo()}
-                  >
-                    <strong>{tr("setup.account.importGo")}</strong>
-                    <span>{tr("onboarding.importGoHint")}</span>
-                  </button>
-                </div>
-              )}
-
-              {accountPanel === "key" && (
-                <div className="setup-form">
-                  <input
-                    className="setup-input"
-                    type="password"
-                    autoComplete="off"
-                    placeholder={tr("setup.account.keyPh")}
-                    value={officialKey}
-                    onChange={(e) => setOfficialKey(e.target.value)}
-                  />
-                  <div className="setup-actions__row">
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      onClick={() => setAccountPanel("menu")}
-                    >
-                      {tr("common.cancel")}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      disabled={accountBusy || !officialKey.trim()}
-                      onClick={() => void saveOfficialKey()}
-                    >
-                      {tr("setup.account.saveKey")}
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -819,13 +679,6 @@ export function SetupWizard({
                 <div className="setup-busy">
                   <Spinner className="size-4" />
                   {tr("setup.account.busy")}
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => void cancelAccountLogin()}
-                  >
-                    {tr("setup.account.cancelBusy")}
-                  </button>
                 </div>
               )}
 

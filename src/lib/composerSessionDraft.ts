@@ -15,7 +15,7 @@ import {
 } from "@/lib/composerQuotes";
 import { isDraftEmpty, parseStoredContent } from "@/lib/draftDoc";
 
-export const COMPOSER_SESSION_DRAFTS_STORAGE_KEY = "grok.composerSessionDrafts";
+export const COMPOSER_SESSION_DRAFTS_STORAGE_KEY = "supercharge.composerSessionDrafts";
 
 export type ComposerSessionDraft = {
   text: string;

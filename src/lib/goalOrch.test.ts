@@ -78,7 +78,7 @@ goal_planner_model = "grok-4"
 
 function memStorage(seed?: string): GoalOrchUiStorage & { store: Map<string, string> } {
   const store = new Map<string, string>();
-  if (seed != null) store.set("grok.goalOrchUiEnabled", seed);
+  if (seed != null) store.set("supercharge.goalOrchUiEnabled", seed);
   return {
     store,
     getItem(key: string) {

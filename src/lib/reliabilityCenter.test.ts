@@ -36,7 +36,7 @@ import { emptyLiveSnapshot, type SessionLiveMap } from "./sessionLiveStore";
 
 function memStorage(seed?: string): StallHistoryStorage & { store: Map<string, string> } {
   const store = new Map<string, string>();
-  if (seed != null) store.set("grok.stallHistory", seed);
+  if (seed != null) store.set("supercharge.stallHistory", seed);
   return {
     store,
     getItem(key: string) {
@@ -642,7 +642,7 @@ describe("stall history (localStorage ring)", () => {
       },
       storage,
     );
-    const raw = storage.getItem("grok.stallHistory");
+    const raw = storage.getItem("supercharge.stallHistory");
     expect(raw).toBeTruthy();
     const parsed = JSON.parse(raw!) as Record<string, unknown>[];
     expect(Object.keys(parsed[0]!).sort()).toEqual(

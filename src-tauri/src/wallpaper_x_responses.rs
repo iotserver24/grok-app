@@ -1,4 +1,4 @@
-//! Read-only wallpaper search through the Grok Build Responses compatibility
+//! Read-only wallpaper search through the Supercharge Responses compatibility
 //! endpoint. This module is Host-internal until the wallpaper search router
 //! explicitly opts into it.
 

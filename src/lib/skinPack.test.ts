@@ -264,8 +264,8 @@ describe("keepWallpaperAllowed / errors / export name", () => {
     );
   });
 
-  it("sanitizes export file names", () => {
-    expect(exportFileName("Harbor dusk")).toBe("Harbor-dusk.grokskin");
-    expect(exportFileName("***")).toBe("skin.grokskin");
+  it("sanitizes Supercharge skin export file names", () => {
+    expect(exportFileName("Harbor dusk")).toBe("Harbor-dusk.superchargeskin");
+    expect(exportFileName("***")).toBe("skin.superchargeskin");
   });
 });

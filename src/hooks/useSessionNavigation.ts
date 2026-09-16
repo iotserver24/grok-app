@@ -223,7 +223,7 @@ function bindShellSession(s: SessionRow): void {
       title: s.title || "Untitled",
       state: resume.state,
       streamingMessageId: resume.streamingMessageId,
-      backend: "grok_agent_stdio",
+      backend: "supercharge_agent_stdio",
     });
   }
 }
@@ -558,7 +558,7 @@ export function useSessionNavigation(opts: {
         sessionId: null,
         title: host.draft.newChatTitle(),
         state: "idle",
-        backend: "grok_agent_stdio",
+        backend: "supercharge_agent_stdio",
       });
 
       // Never sessionDisconnect: an in-flight turn on the previous live host

@@ -1,4 +1,4 @@
-//! Grok Build **agent serve** process management for Settings → Runtime.
+//! Supercharge **agent serve** process management for Settings → Runtime.
 //!
 //! CLI surface:
 //! - `grok agent serve --bind <addr> --secret <token> [--remote <url>]`
@@ -8,7 +8,7 @@
 //!
 //! Clients connect with:
 //! - WebSocket URL: `ws://{bind}/ws?server-key={secret}`
-//! - or CLI: `grok --remote ws://{bind}/ws --secret <token>`
+//! - or CLI: `supercharge --remote ws://{bind}/ws --secret <token>`
 
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::Path;
@@ -64,7 +64,7 @@ pub struct ServeStatusDto {
     /// Subsequent `serve_status` omits this so secrets do not linger in status polls.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connection_url: Option<String>,
-    /// Full client CLI string (`grok --remote ws://…/ws --secret …`) — **only** from `serve_start`.
+    /// Full client CLI string (`supercharge --remote ws://…/ws --secret …`) — **only** from `serve_start`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connection_cli: Option<String>,
     /// Masked client CLI template for status polls (secret last-4 only).
@@ -164,7 +164,7 @@ pub fn build_connection_url_masked(bind: &str, secret: &str) -> String {
     format!("ws://{bind}/ws?server-key={}", mask_secret(secret))
 }
 
-/// Client CLI connection string: `grok --remote ws://{bind}/ws --secret <token>`.
+/// Client CLI connection string: `supercharge --remote ws://{bind}/ws --secret <token>`.
 pub fn build_connection_cli(bind: &str, secret: &str) -> String {
     format!(
         "grok --remote {} --secret {}",
@@ -276,7 +276,7 @@ pub fn derive_serve_state(
     if !cli_found {
         return (
             "error",
-            Some("Grok Build CLI not found. Install or set the CLI path under Runtime.".into()),
+            Some("Supercharge CLI not found. Install or set the CLI path under Runtime.".into()),
         );
     }
     if !cli_supports_serve {
@@ -285,7 +285,7 @@ pub fn derive_serve_state(
             Some(
                 support_msg
                     .unwrap_or(
-                        "This Grok Build CLI version does not expose `agent serve` (WebSocket server).",
+                        "This Supercharge CLI version does not expose `agent serve` (WebSocket server).",
                     )
                     .to_string(),
             ),
@@ -303,7 +303,7 @@ fn run_grok_cli_args(args: &[&str], timeout_secs: u64) -> Result<(String, String
     let settings = store::load_settings();
     let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
     let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return Err("Grok Build CLI not found".into());
+        return Err("Supercharge CLI not found".into());
     };
 
     let args_owned: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
@@ -332,7 +332,12 @@ fn probe_cli_supports_serve() -> (bool, bool, bool, Option<String>) {
     let settings = store::load_settings();
     let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
     if !probe.found {
-        return (false, false, false, Some("Grok Build CLI not found".into()));
+        return (
+            false,
+            false,
+            false,
+            Some("Supercharge CLI not found".into()),
+        );
     }
     match run_grok_cli_args(&["agent", "serve", "--help"], 8) {
         Ok((stdout, stderr, ok)) => {
@@ -346,7 +351,7 @@ fn probe_cli_supports_serve() -> (bool, bool, bool, Option<String>) {
                     false,
                     false,
                     Some(
-                        "This Grok Build CLI version does not expose `agent serve` (WebSocket server)."
+                        "This Supercharge CLI version does not expose `agent serve` (WebSocket server)."
                             .into(),
                     ),
                 )
@@ -461,7 +466,7 @@ fn spawn_serve_process(
 ) -> Result<TrackedServe, String> {
     // Never log full secret — only bind + masked secret + optional remote (no secret).
     tracing::info!(
-        target: "grok_app::serve",
+        target: "supercharge_app::serve",
         bind = %bind,
         secret = %mask_secret(secret),
         remote = remote.unwrap_or(""),
@@ -635,7 +640,7 @@ pub async fn serve_start(
             return Ok(collect_status_sync(true));
         }
         if !current.cli_found {
-            return Err("Grok Build CLI not found".into());
+            return Err("Supercharge CLI not found".into());
         }
         if !current.cli_supports_serve {
             return Err(current.message.unwrap_or_else(|| {
@@ -649,7 +654,7 @@ pub async fn serve_start(
         let remote_norm = normalize_remote_url(remote.as_deref())?;
         if remote_norm.is_some() && !current.cli_supports_remote {
             return Err(
-                "This Grok Build CLI version does not support `agent serve --remote` (proxy mode)."
+                "This Supercharge CLI version does not support `agent serve --remote` (proxy mode)."
                     .into(),
             );
         }
@@ -662,13 +667,13 @@ pub async fn serve_start(
         let settings = store::load_settings();
         let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
         let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-            return Err("Grok Build CLI not found".into());
+            return Err("Supercharge CLI not found".into());
         };
 
         let secret = generate_serve_secret();
         // Log only masked secret + remote (remote has no secret by validation).
         tracing::info!(
-            target: "grok_app::serve",
+            target: "supercharge_app::serve",
             bind = %bind_norm,
             secret = %mask_secret(&secret),
             remote = remote_norm.as_deref().unwrap_or(""),
@@ -735,7 +740,7 @@ pub async fn serve_stop() -> Result<ServeStatusDto, String> {
         if let Ok(mut guard) = TRACKED_SERVE.lock() {
             if let Some(t) = guard.take() {
                 tracing::info!(
-                    target: "grok_app::serve",
+                    target: "supercharge_app::serve",
                     pid = t.pid,
                     bind = %t.bind,
                     secret = %mask_secret(&t.secret),
@@ -812,7 +817,7 @@ pub async fn serve_tcp_probe(addr: String) -> Result<ServeTcpProbeResult, String
 
     // Log only the bare target — never a URL with credentials.
     tracing::debug!(
-        target: "grok_app::serve",
+        target: "supercharge_app::serve",
         target = %target,
         "tcp probe"
     );

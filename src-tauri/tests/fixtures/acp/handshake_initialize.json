@@ -1,19 +1,24 @@
 {
-  "_comment": "Host → agent initialize request params + sample agent result. Locked by wire_initialize_params().",
+  "_comment": "Host → Supercharge agent initialize request params + sample agent result. Locked by wire_initialize_params().",
   "hostRequest": {
     "jsonrpc": "2.0",
     "method": "initialize",
     "params": {
       "protocolVersion": 1,
       "clientInfo": {
-        "name": "grok-app",
-        "version": "0.1.0"
+        "name": "supercharge-desktop",
+        "version": "0.2.35"
       },
-      "capabilities": {
-        "meta": {
+      "clientCapabilities": {
+        "_meta": {
           "x.ai/incrementalBashOutput": true,
           "x.ai/bashOutputNoColor": true
         }
+      },
+      "_meta": {
+        "clientType": "supercharge-desktop",
+        "clientIdentifier": "supercharge-desktop",
+        "clientVersion": "0.2.35"
       }
     }
   },
@@ -23,16 +28,17 @@
       "loadSession": true
     },
     "authMethods": [
-      { "id": "cached_token", "name": "Cached token" },
-      { "id": "grok.com", "name": "grok.com OAuth" }
+      { "id": "provider.api_key", "name": "Provider API key" },
+      { "id": "cached_token", "name": "Cached token" }
     ],
     "_meta": {
-      "agentVersion": "0.2.106"
+      "agentVersion": "supercharge 1.3.6",
+      "defaultAuthMethodId": "provider.api_key"
     }
   },
   "expect": {
     "protocolVersion": 1,
-    "clientName": "grok-app",
+    "clientName": "supercharge-desktop",
     "capabilitiesIsObject": true
   }
 }

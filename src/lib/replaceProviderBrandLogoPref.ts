@@ -6,7 +6,7 @@
  */
 
 export const REPLACE_PROVIDER_BRAND_LOGO_STORAGE_KEY =
-  "grok.replaceProviderBrandLogo";
+  "supercharge.replaceProviderBrandLogo";
 
 /** Fired on `window` after a successful save (detail = boolean enabled). */
 export const REPLACE_PROVIDER_BRAND_LOGO_CHANGE_EVENT =

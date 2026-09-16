@@ -33,7 +33,7 @@ export type RimBridgeEvent = {
   note?: string;
 };
 
-export const RIM_EVENT_TIMELINE_STORAGE_KEY = "grok-app.remoteIm.eventTimeline";
+export const RIM_EVENT_TIMELINE_STORAGE_KEY = "supercharge-app.remoteIm.eventTimeline";
 export const RIM_EVENT_TIMELINE_MAX = 50;
 export const RIM_EVENT_NOTE_MAX = 200;
 

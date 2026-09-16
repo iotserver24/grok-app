@@ -4,7 +4,7 @@
  * Default: false (show only when the user has scrolled up, as today).
  */
 
-export const BACK_BOTTOM_ALWAYS_STORAGE_KEY = "grok.backBottomAlways";
+export const BACK_BOTTOM_ALWAYS_STORAGE_KEY = "supercharge.backBottomAlways";
 
 /** Fired on `window` after a successful save (detail = boolean always). */
 export const BACK_BOTTOM_ALWAYS_CHANGE_EVENT = "grok-back-bottom-always-change";

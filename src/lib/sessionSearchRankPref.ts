@@ -13,7 +13,7 @@ import {
   type SessionSearchRankMode,
 } from "./sessionSearch";
 
-export const SESSION_SEARCH_RANK_STORAGE_KEY = "grok.sessionSearchRank";
+export const SESSION_SEARCH_RANK_STORAGE_KEY = "supercharge.sessionSearchRank";
 
 /** Fired on `window` after a successful save (detail = SessionSearchRankMode). */
 export const SESSION_SEARCH_RANK_CHANGE_EVENT = "grok-session-search-rank-change";

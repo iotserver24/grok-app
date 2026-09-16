@@ -62,7 +62,7 @@ pub fn extra_rules_spawn_flags(rules: Option<&str>) -> Vec<String> {
     }
 }
 
-/// Pure helper: top-level `grok --trust` when the App folder is trusted.
+/// Pure helper: top-level `supercharge --trust` when the App folder is trusted.
 ///
 /// Headless ACP has no interactive trust prompt; without this flag CLI skips
 /// startup loading of project instructions (AGENTS.md) and project skills.
@@ -120,7 +120,7 @@ pub fn cli_permission_mode(policy: &str) -> &'static str {
 
 /// Resolve effective CLI `--permission-mode` from App policy + product session mode.
 ///
-/// Precedence (Grok Build): YOLO / `always_approve` → `bypassPermissions`;
+/// Precedence (Supercharge): YOLO / `always_approve` → `bypassPermissions`;
 /// product `plan` mode → `plan`; else policy table.
 pub fn resolve_cli_permission_mode(policy: &str, product_mode: Option<&str>) -> &'static str {
     use crate::permission::PermissionPolicy;
@@ -172,19 +172,19 @@ pub fn is_spawnable_reasoning_effort(id: &str) -> bool {
 
 /// Pure spawn plan for the OS-level sandbox profile.
 ///
-/// `--sandbox` is a **top-level** `grok` flag (not under `agent` / `stdio`),
-/// and the CLI also reads `GROK_SANDBOX`. When the profile is off/empty we
+/// `--sandbox` is a **top-level** Supercharge flag (not under `agent` / `stdio`),
+/// and the CLI also reads `SUPERCHARGE_SANDBOX`. When the profile is off/empty we
 /// apply neither so the agent stays unrestricted (CLI default).
 ///
 /// Soft-fail: known-old CLIs (&lt; 0.2.112) omit the flag/env so clap does not
 /// reject unknown `--sandbox` (AGENT_CRASHED). Unknown versions still emit
-/// (forward-compatible with current Grok Build).
+/// (forward-compatible with current Supercharge).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SandboxSpawnSpec {
     pub profile: String,
 }
 
-/// First App-aligned floor where `--sandbox` / `GROK_SANDBOX` is expected.
+/// First App-aligned floor where `--sandbox` / `SUPERCHARGE_SANDBOX` is expected.
 pub const SANDBOX_MIN_CLI: (u64, u64, u64) = (0, 2, 112);
 
 impl SandboxSpawnSpec {
@@ -204,9 +204,9 @@ impl SandboxSpawnSpec {
         ["--sandbox".into(), self.profile.clone()]
     }
 
-    /// Env var name + value for `GROK_SANDBOX`.
+    /// Env var name + value for `SUPERCHARGE_SANDBOX`.
     pub fn env_pair(&self) -> (String, String) {
-        ("GROK_SANDBOX".into(), self.profile.clone())
+        ("SUPERCHARGE_SANDBOX".into(), self.profile.clone())
     }
 }
 
@@ -250,8 +250,8 @@ pub fn sandbox_spawn_flags_soft(
 
 // ── Compaction mode / detail (CLI 0.2.117+) ────────────────────────────────
 //
-// Top-level: `--compaction-mode summary|transcript|segments` → GROK_COMPACTION_MODE
-//            `--compaction-detail none|minimal|balanced|verbose` → GROK_COMPACTION_DETAIL
+// Top-level: `--compaction-mode summary|transcript|segments` → SUPERCHARGE_COMPACTION_MODE
+//            `--compaction-detail none|minimal|balanced|verbose` → SUPERCHARGE_COMPACTION_DETAIL
 // Detail only affects `segments` (CLI default verbose). Host always sets env
 // (ignored by older CLIs); CLI flags pass only when version ≥ 0.2.117.
 
@@ -302,10 +302,10 @@ pub fn compaction_spawn_args(mode: &str, detail: &str) -> Vec<String> {
 /// Env pairs for the agent process (always safe on older CLIs).
 pub fn compaction_spawn_env(mode: &str, detail: &str) -> Vec<(String, String)> {
     let m = normalize_compaction_mode(mode);
-    let mut out = vec![("GROK_COMPACTION_MODE".into(), m.into())];
+    let mut out = vec![("SUPERCHARGE_COMPACTION_MODE".into(), m.into())];
     if compaction_detail_applies(m) {
         out.push((
-            "GROK_COMPACTION_DETAIL".into(),
+            "SUPERCHARGE_COMPACTION_DETAIL".into(),
             normalize_compaction_detail(detail).into(),
         ));
     }
@@ -730,40 +730,11 @@ pub(crate) fn apply_grok_build_proxy_env(
     cmd: &mut tokio::process::Command,
     native: &crate::providers::GrokBuildProxySpawn,
 ) {
-    // Process-scoped only: expose the relay as Grok Build's native model
+    // Process-scoped only: expose the relay as Supercharge's native model
     // catalog / chat proxy and authenticate with the provider key. Never write
     // or log these values outside this child.
-    cmd.env("GROK_MODELS_BASE_URL", &native.base_url);
-    cmd.env("GROK_MODELS_LIST_URL", &native.models_url);
-    cmd.env("GROK_CLI_CHAT_PROXY_BASE_URL", &native.base_url);
+    cmd.env("SUPERCHARGE_MODELS_BASE_URL", &native.base_url);
+    cmd.env("SUPERCHARGE_MODELS_LIST_URL", &native.models_url);
+    cmd.env("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", &native.base_url);
     cmd.env("XAI_API_KEY", &native.api_key);
-}
-
-/// Whether this ACP process should call `authenticate(cached_token)`.
-///
-/// Skip when:
-/// - **custom relay** — Grok Build sends OIDC once `cached_token` succeeds,
-///   even when the request URL is a custom relay (HTTP 400 Incorrect API key
-///   / 401). `cached_token` reads `~/.grok/auth.json`, which official login
-///   must keep for Account billing / official-aux. Clearing only agent-home
-///   `auth.json` is not enough.
-/// - **unsigned-in** — no usable cached token (`auth.json` missing, or no
-///   `key` / `access_token` / `refresh_token`). The CLI has nothing to load;
-///   sending `authenticate` waits `AUTH_TIMEOUT_SECS` twice then soft-fails
-///   (~24s of ERROR logs) while the workbench still opens idle.
-///
-/// Keep the call when the official route is signed in. The #528
-/// signed-in-but-agent-home-stale path still re-syncs and retries once.
-pub fn should_authenticate_cached_token(custom_route: bool, has_cached_token: bool) -> bool {
-    !custom_route && has_cached_token
-}
-
-/// Host-side probe: official OIDC material exists for `cached_token`.
-///
-/// Uses [`crate::account::read_auth_profile`] (canonical `~/.grok/auth.json`
-/// preferred over an empty agent-home copy). Does not unlock the App keychain
-/// or treat an official API key as a cached token — those are not what
-/// `authenticate(cached_token)` loads.
-pub fn has_cached_token_for_authenticate() -> bool {
-    crate::account::read_auth_profile().signed_in
 }

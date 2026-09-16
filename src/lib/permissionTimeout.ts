@@ -6,7 +6,7 @@
  * Settings offers presets; storage accepts any non-negative integer.
  */
 
-export const PERMISSION_TIMEOUT_STORAGE_KEY = "grok.permissionTimeoutSec";
+export const PERMISSION_TIMEOUT_STORAGE_KEY = "supercharge.permissionTimeoutSec";
 
 /** Fired on `window` after a successful save (detail = seconds). */
 export const PERMISSION_TIMEOUT_CHANGE_EVENT = "grok-permission-timeout-change";

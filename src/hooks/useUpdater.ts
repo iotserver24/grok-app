@@ -61,10 +61,11 @@ const BACKGROUND_BLOCKED_STATES = new Set<UpdateStatus["state"]>([
   "manual-required",
 ]);
 
-/** Override via VITE_GROK_RELEASES_URL when the repo path differs. */
+/** Supercharge override first; retain the legacy variable for existing build environments. */
 const GITHUB_RELEASES_URL =
+  (import.meta.env.VITE_SUPERCHARGE_RELEASES_URL as string | undefined) ||
   (import.meta.env.VITE_GROK_RELEASES_URL as string | undefined) ||
-  "https://github.com/RongleCat/grok-app/releases/latest";
+  "https://github.com/iotserver24/supercharge-releases/releases/latest";
 
 function toErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

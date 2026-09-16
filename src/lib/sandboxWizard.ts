@@ -40,7 +40,7 @@ export const SANDBOX_WIZARD_STEP_TOTAL = SANDBOX_WIZARD_STEPS.length;
 export type SandboxWizardMode = "trust" | "info";
 
 /** Soft localStorage key for “don’t offer after trust”. */
-export const SANDBOX_WIZARD_DISMISS_KEY = "grok.sandboxWizard.dismissed.v1";
+export const SANDBOX_WIZARD_DISMISS_KEY = "supercharge.sandboxWizard.dismissed.v1";
 
 export const SANDBOX_WIZARD_DISMISS_VERSION = 1;
 

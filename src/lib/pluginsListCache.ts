@@ -6,7 +6,7 @@
 import type { PluginDto } from "./api/extensions";
 
 export const PLUGINS_LIST_TTL_MS = 30 * 60 * 1000; // 30 minutes
-const STORAGE_KEY = "grok-app.pluginsList.v1";
+const STORAGE_KEY = "supercharge-app.pluginsList.v1";
 
 export type PluginsListSnapshot = {
   fetchedAt: number;

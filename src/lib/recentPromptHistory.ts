@@ -18,7 +18,7 @@ export type RecentPromptEntry = {
   at: string;
 };
 
-export const RECENT_PROMPT_HISTORY_STORAGE_KEY = "grok.recentPromptHistory";
+export const RECENT_PROMPT_HISTORY_STORAGE_KEY = "supercharge.recentPromptHistory";
 export const RECENT_PROMPT_HISTORY_MAX = 50;
 /** Cap stored prompt length (localStorage). Display still truncates in the list. */
 export const RECENT_PROMPT_TEXT_MAX = 8000;

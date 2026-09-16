@@ -23,7 +23,6 @@ use tracing::info;
 use crate::mirror::MirrorHost;
 use crate::remote_im::RemoteImState;
 use crate::session_manager::SessionManager;
-use crate::voice_host::VoiceHost;
 
 /// Process-wide guard so prepare-for-update does not race with itself.
 ///
@@ -115,26 +114,21 @@ pub async fn prepare_for_app_update(
     app: AppHandle,
     mgr: State<'_, Arc<SessionManager>>,
     mirror: State<'_, Arc<MirrorHost>>,
-    voice: State<'_, Arc<VoiceHost>>,
     remote_im: State<'_, Arc<RemoteImState>>,
 ) -> Result<(), String> {
     if UPDATE_SHUTDOWN_DONE.swap(true, Ordering::SeqCst) {
-        info!(target: "grok_app::updater", "prepare_for_app_update already completed");
+        info!(target: "supercharge_app::updater", "prepare_for_app_update already completed");
         return Ok(());
     }
 
-    info!(target: "grok_app::updater", "stopping managed processes before app relaunch");
-
-    // Voice realtime session first (network + tool delegation).
-    // Pass SessionManager so keep_agents_on_end=false can cancel delegated turns.
-    let _ = voice.stop(&app, mgr.inner()).await;
+    info!(target: "supercharge_app::updater", "stopping managed processes before app relaunch");
 
     // Remote IM connectors (Feishu / Weixin / …).
     // Hold `inner` only while stop_async runs; stop_async does not re-enter `inner`.
     {
         let mut rt = remote_im.inner.lock().await;
         if let Err(e) = rt.stop_async().await {
-            tracing::warn!(target: "grok_app::updater", error = %e, "remote_im stop during prepare_for_app_update");
+            tracing::warn!(target: "supercharge_app::updater", error = %e, "remote_im stop during prepare_for_app_update");
         }
     }
 
@@ -144,7 +138,7 @@ pub async fn prepare_for_app_update(
     // Mirror HTTP host + cloudflared tunnel.
     mirror.stop_sync();
 
-    info!(target: "grok_app::updater", "managed processes stopped; safe to relaunch");
+    info!(target: "supercharge_app::updater", "managed processes stopped; safe to relaunch");
     Ok(())
 }
 

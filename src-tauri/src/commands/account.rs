@@ -1,4 +1,4 @@
-// ── Official Grok Build account ─────────────────────────────────────────────
+// ── Official Supercharge account ─────────────────────────────────────────────
 
 #[tauri::command]
 pub async fn account_status(
@@ -49,7 +49,7 @@ pub async fn account_login_cancel() -> Result<(), String> {
 
 /// Paste a browser verification code into the running `grok login` process.
 ///
-/// auth.x.ai sometimes shows “copy this code into Grok Build” instead of a
+/// auth.x.ai sometimes shows “copy this code into Supercharge” instead of a
 /// localhost callback — the App keeps CLI stdin open and accepts that paste.
 #[tauri::command]
 pub async fn account_login_submit_code(code: String) -> Result<(), String> {

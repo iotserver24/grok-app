@@ -6,7 +6,7 @@
  * for native overflow if that window jumps when scrolling up.
  */
 
-export const CHAT_VIRTUAL_SCROLL_STORAGE_KEY = "grok.chatVirtualScroll";
+export const CHAT_VIRTUAL_SCROLL_STORAGE_KEY = "supercharge.chatVirtualScroll";
 
 /** Fired on `window` after a successful save (detail = boolean enabled). */
 export const CHAT_VIRTUAL_SCROLL_CHANGE_EVENT = "grok-chat-virtual-scroll-change";

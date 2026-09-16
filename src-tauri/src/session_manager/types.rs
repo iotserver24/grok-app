@@ -338,7 +338,7 @@ pub(super) fn build_history_bootstrap(app_session_id: &str) -> Option<String> {
         &crate::session_attach::StoreAttachJournal,
     )?;
     let mut body = String::from(
-        "[Prior conversation context — this chat continues an existing Grok App session. \
+        "[Prior conversation context — this chat continues an existing Supercharge App session. \
 The agent process was restarted; use the following transcript for continuity ONLY. \
 Rules: do NOT re-greet; do NOT restate, quote, or re-answer prior assistant turns; \
 do NOT reprint the transcript in your reply; answer ONLY the new user message below.]\n\n",
@@ -1098,7 +1098,7 @@ pub(crate) const TOOL_OUTPUT_SENTINEL: &str = "\u{1}output";
 
 /// Real tool **output** from the ACP terminal `tool_call_update`.
 ///
-/// Grok CLI puts what the tool produced in `content[]`, which this crate
+/// Supercharge CLI puts what the tool produced in `content[]`, which this crate
 /// previously never read — so `detail` only ever held the *call argument*
 /// echoed back from `rawInput`, and read/list/search tools (no command/query
 /// key) produced no expandable body at all.
@@ -1161,7 +1161,7 @@ fn push_output_chunk(out: &mut String, chunk: &str) {
     out.push_str(chunk);
 }
 
-/// When user asks to open a Grok App / foreign agent session by UUID, steer tools.
+/// When user asks to open a Supercharge App / foreign agent session by UUID, steer tools.
 pub(super) fn session_lookup_host_hint(user_text: &str) -> Option<String> {
     let t = user_text.trim();
     // UUID v4-ish
@@ -1182,10 +1182,10 @@ pub(super) fn session_lookup_host_hint(user_text: &str) -> Option<String> {
     }
     Some(
         "[Host hint — session lookup]\n\
-This looks like a request to read a **Grok App / agent session** by UUID.\n\
+This looks like a request to read a **Supercharge App / agent session** by UUID.\n\
 Do **not** scan the whole home directory or assume Claude/Codex/Cursor storage first.\n\
 Prefer, in order:\n\
-1. Grok App journal: `~/Library/Application Support/com.grokapp.grok-app/sessions/<id>/messages.json` \
+1. Supercharge App journal: `~/Library/Application Support/com.grokapp.grok-app/sessions/<id>/messages.json` \
 (and `sessions_index.json` for meta).\n\
 2. Grok agent-home: `…/com.grokapp.grok-app/agent-home/sessions/<encoded-cwd>/<agentSessionId>/` \
 (chat_history.jsonl, updates.jsonl) — map app session id via sessions_index.agentSessionId.\n\

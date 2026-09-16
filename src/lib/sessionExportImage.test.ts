@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import {
-  GROK_APP_SHARE_FOOTER,
+  SUPERCHARGE_APP_SHARE_FOOTER,
   buildShareCardModel,
   buildShareContentParts,
   exportableToShareMessages,
@@ -12,9 +12,9 @@ import {
 describe("sessionExportImageFilename", () => {
   it("builds safe png names", () => {
     expect(sessionExportImageFilename("Fix Doctor Reset!", "abcdef12-xxxx")).toBe(
-      "grok-fix-doctor-reset-abcdef12.png",
+      "supercharge-fix-doctor-reset-abcdef12.png",
     );
-    expect(sessionExportImageFilename("", null)).toBe("grok-session.png");
+    expect(sessionExportImageFilename("", null)).toBe("supercharge-session.png");
   });
 });
 
@@ -34,7 +34,7 @@ describe("buildShareCardModel", () => {
     expect(model.messages).toHaveLength(2);
     expect(model.messages[0]?.role).toBe("user");
     expect(model.messages[1]?.thought).toBeUndefined();
-    expect(model.footerText).toBe(GROK_APP_SHARE_FOOTER);
+    expect(model.footerText).toBe(SUPERCHARGE_APP_SHARE_FOOTER);
     expect(model.logoDataUrl).toBeNull();
   });
 
@@ -67,7 +67,7 @@ describe("buildShareCardModel", () => {
 });
 
 describe("shareCardToHtml", () => {
-  it("escapes content and always shows Grok App footer", () => {
+  it("escapes content and always shows the Supercharge footer", () => {
     const model = buildShareCardModel({
       title: '<script>alert(1)</script>',
       messages: [{ role: "user", content: "a <b>b</b>" }],
@@ -75,7 +75,7 @@ describe("shareCardToHtml", () => {
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
     });
     const html = shareCardToHtml(model);
-    expect(html).toContain("Generated with Grok App");
+    expect(html).toContain("Generated with Supercharge");
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>alert");
     expect(html).toContain('class="sc-logo"');

@@ -154,9 +154,6 @@ import {
   loadCodeWrapPref,
 } from "@/lib/codeWrapPref";
 import {
-  loadVoiceHotkeyEnabled,
-} from "@/lib/voiceHotkeyPref";
-import {
   loadConfirmExternalLinksPref,
 } from "@/lib/externalLinkPref";
 import {
@@ -383,12 +380,8 @@ export function SettingsPage({
   onAllowedTools,
   useLeader = false,
   onUseLeader,
-  voiceId = "eve",
-  onVoiceId,
   voiceDictationAutoSend = false,
   onVoiceDictationAutoSend,
-  voiceKeepAgentsOnEnd = true,
-  onVoiceKeepAgentsOnEnd,
   sttEngine = "official",
   onSttEngine,
   sttCustomBaseUrl = "",
@@ -433,27 +426,6 @@ export function SettingsPage({
   costRollupSessions = [],
   costRollupProjects = [],
   versionFooter,
-  account,
-  accountLoading,
-  accountBusy,
-  accountHeatmapError = null,
-  accountProbeError = null,
-  loginHint = null,
-  savedAccounts = [],
-  activeAccountId = null,
-  onAccountLoginOauth,
-  onAccountLoginDevice,
-  onAccountLoginSubmitCode,
-  onCancelLogin,
-  onAccountLogout,
-  onAccountRefresh,
-  onAccountManageUsage,
-  onAccountSubscribe,
-  onSaveAccount,
-  onAddAccount,
-  onSwitchAccount,
-  onRemoveAccount,
-  onImportChat,
   defaultOpenTarget = "finder",
   onDefaultOpenTarget,
   onProvidersChanged,
@@ -557,7 +529,7 @@ export function SettingsPage({
   const [wallpaperFocusOpen, setWallpaperFocusOpen] = useState(false);
   const [wallpaperSourceOpen, setWallpaperSourceOpen] = useState(false);
   const [wallpaperSourceTab, setWallpaperSourceTab] =
-    useState<WallpaperSourceTab>("x");
+    useState<WallpaperSourceTab>("web");
   /** Thinking block expand preference (localStorage; self-contained). */
   const [thinkingExpand, setThinkingExpand] = useState<ThinkingExpandPref>(
     () => loadThinkingExpandPref(),
@@ -711,9 +683,6 @@ export function SettingsPage({
   const [sessionSearchRank, setSessionSearchRank] =
     useState<SessionSearchRankMode>(() => loadSessionSearchRankPref());
   /** Live Voice catalog hotkey on/off — frontend-only localStorage. */
-  const [voiceHotkeyEnabled, setVoiceHotkeyEnabled] = useState(() =>
-    loadVoiceHotkeyEnabled(),
-  );
   const [confirmExternalLinks, setConfirmExternalLinks] = useState(() =>
     loadConfirmExternalLinksPref(),
   );
@@ -1594,12 +1563,8 @@ export function SettingsPage({
     onAllowedTools,
     useLeader,
     onUseLeader,
-    voiceId,
-    onVoiceId,
     voiceDictationAutoSend,
     onVoiceDictationAutoSend,
-    voiceKeepAgentsOnEnd,
-    onVoiceKeepAgentsOnEnd,
     sttEngine,
     onSttEngine,
     sttCustomBaseUrl,
@@ -1644,27 +1609,6 @@ export function SettingsPage({
     costRollupSessions,
     costRollupProjects,
     versionFooter,
-    account,
-    accountLoading,
-    accountBusy,
-    accountHeatmapError,
-    accountProbeError,
-    loginHint,
-    savedAccounts,
-    activeAccountId,
-    onAccountLoginOauth,
-    onAccountLoginDevice,
-    onAccountLoginSubmitCode,
-    onCancelLogin,
-    onAccountLogout,
-    onAccountRefresh,
-    onAccountManageUsage,
-    onAccountSubscribe,
-    onSaveAccount,
-    onAddAccount,
-    onSwitchAccount,
-    onRemoveAccount,
-    onImportChat,
     defaultOpenTarget,
     onDefaultOpenTarget,
     onProvidersChanged,
@@ -1775,8 +1719,6 @@ export function SettingsPage({
     setSelectionToolbar,
     sessionSearchRank,
     setSessionSearchRank,
-    voiceHotkeyEnabled,
-    setVoiceHotkeyEnabled,
     confirmExternalLinks,
     setConfirmExternalLinks,
     stopAllSkipConfirm,

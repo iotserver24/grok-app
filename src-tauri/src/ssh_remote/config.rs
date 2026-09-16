@@ -113,7 +113,7 @@ pub fn acp_session_cwd_ok(ssh_alias: Option<&str>, cwd: &str) -> bool {
     std::path::Path::new(t).is_dir()
 }
 
-/// Same gate as `grok sessions list` / TUI `/resume` for a cwd.
+/// Same gate as `supercharge sessions list` / TUI `/resume` for a cwd.
 ///
 /// Disk under `~/.grok/sessions` also stores subagent children and empty
 /// shells that only have `chat_history.jsonl`. Those are not resumable

@@ -4,7 +4,7 @@
  * Default: true (timestamps visible when createdAt exists).
  */
 
-export const MESSAGE_TIMESTAMPS_STORAGE_KEY = "grok.messageTimestamps";
+export const MESSAGE_TIMESTAMPS_STORAGE_KEY = "supercharge.messageTimestamps";
 
 /** Fired on `window` after a successful save (detail = boolean show). */
 export const MESSAGE_TIMESTAMPS_CHANGE_EVENT = "grok-message-timestamps-change";

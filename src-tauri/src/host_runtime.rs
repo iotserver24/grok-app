@@ -106,7 +106,7 @@ pub fn on_process_start() {
     let previous = read_runtime();
     if let Some(record) = detect_unclean(previous.as_ref()) {
         tracing::warn!(
-            target: "grok_app::host_runtime",
+            target: "supercharge_app::host_runtime",
             pid = record.previous_pid,
             dirty = record.dirty_lease_session_ids.len(),
             "previous host process did not shut down cleanly"

@@ -5,7 +5,7 @@
  * Default: off. Fail-closed outside Tauri (invoke no-op via api).
  */
 
-export const WIN_TASKBAR_OVERLAY_STORAGE_KEY = "grok.winTaskbarOverlay";
+export const WIN_TASKBAR_OVERLAY_STORAGE_KEY = "supercharge.winTaskbarOverlay";
 
 /** Fired on `window` after a successful save (detail = boolean enabled). */
 export const WIN_TASKBAR_OVERLAY_CHANGE_EVENT = "grok-win-taskbar-overlay-change";

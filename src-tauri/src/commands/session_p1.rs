@@ -310,8 +310,8 @@ pub async fn session_pending_ask_user(
 
 #[tauri::command]
 pub async fn probe_cli(manual_path: Option<String>) -> Result<CliProbeResult, String> {
-    // probe_cli runs `grok --version` (sync I/O). Never block a Tokio worker —
-    // a hung binary used to freeze the setup gate ("Checking Grok Build…") forever.
+    // probe_cli runs `supercharge --version` (sync I/O). Never block a Tokio worker —
+    // a hung binary used to freeze the setup gate ("Checking Supercharge…") forever.
     // When Settings → CLI backend is WSL, probe inside the distro instead of PATH.
     tokio::task::spawn_blocking(move || {
         let settings = store::load_settings();
@@ -386,11 +386,12 @@ pub async fn acp_server_probe(
     Ok(crate::acp_client::acp_server_probe(addr).await)
 }
 
-/// Download + install latest Grok Build (multi-mirror, progress via `setup://cli-install-progress`).
+/// Download + install the latest public Supercharge CLI release.
+/// Progress is emitted via `setup://cli-install-progress`.
 ///
 /// `allow_unverified`: optional; when omitted, uses Settings
 /// `allowUnverifiedCliInstall`. Missing published checksums are allowed by
-/// default; this flag (or env) only overrides `GROK_CLI_REQUIRE_CHECKSUM`.
+/// default; this flag (or env) only overrides `SUPERCHARGE_CLI_REQUIRE_CHECKSUM`.
 /// Checksum **mismatch** always aborts.
 #[tauri::command]
 pub async fn cli_install_latest(
@@ -409,13 +410,13 @@ pub async fn cli_install_latest(
     Ok(result)
 }
 
-/// Platform install command + docs URL for manual fallback.
+/// Public Supercharge install command + releases URL for manual fallback.
 #[tauri::command]
 pub async fn cli_install_commands() -> Result<serde_json::Value, String> {
     Ok(crate::cli_install::install_commands())
 }
 
-/// Native file picker for a Grok Build binary (manual path).
+/// Native file picker for a Supercharge CLI binary (manual path).
 #[tauri::command]
 pub async fn pick_cli_binary() -> Result<Option<String>, String> {
     let file = tauri::async_runtime::spawn_blocking(|| {
@@ -423,14 +424,14 @@ pub async fn pick_cli_binary() -> Result<Option<String>, String> {
         #[cfg(target_os = "windows")]
         {
             let dlg = rfd::FileDialog::new()
-                .set_title("Select Grok Build binary / 选择 Grok Build 可执行文件")
+                .set_title("Select Supercharge CLI binary / 选择 Supercharge CLI 可执行文件")
                 .add_filter("Executable", &["exe", "cmd", "bat"]);
             dlg.pick_file()
         }
         #[cfg(not(target_os = "windows"))]
         {
             rfd::FileDialog::new()
-                .set_title("Select Grok Build binary / 选择 Grok Build 可执行文件")
+                .set_title("Select Supercharge CLI binary / 选择 Supercharge CLI 可执行文件")
                 .pick_file()
         }
     })
@@ -664,14 +665,14 @@ pub async fn sessions_search(
     .map_err(|e| e.to_string())
 }
 
-/// List Grok Build CLI sessions under GROK_HOME (shared-mode discovery, E03).
+/// List Supercharge CLI sessions under GROK_HOME (shared-mode discovery, E03).
 #[tauri::command]
 pub async fn cli_sessions_list() -> Result<Vec<crate::cli_sessions::CliSessionSummary>, String> {
     let mode = store::load_settings_async().await.session_data_mode;
     crate::cli_sessions::list_cli_sessions(&mode)
 }
 
-/// Search CLI sessions via `grok sessions search` (summaries + first prompts).
+/// Search CLI sessions via `supercharge sessions search` (summaries + first prompts).
 /// Falls back to local disk filter (incl. first prompt) when CLI is unavailable.
 #[tauri::command]
 pub async fn cli_sessions_search(
@@ -942,7 +943,7 @@ pub async fn session_set_worktree(
 
 /// Set or clear the optional JSON Schema for structured model output.
 /// When the session is live, disconnect so the next connect re-spawns with
-/// top-level `grok --json-schema` (prompt-side wrap still applies immediately).
+/// top-level `supercharge --json-schema` (prompt-side wrap still applies immediately).
 #[tauri::command]
 pub async fn session_set_json_schema(
     app: tauri::AppHandle,
@@ -1086,7 +1087,7 @@ pub async fn project_rules_invalidate_sessions(
     Ok(n)
 }
 
-/// Set or clear per-session extra rules (`grok --rules` at next spawn).
+/// Set or clear per-session extra rules (`supercharge --rules` at next spawn).
 /// Empty / whitespace clears. Forces a fresh agent session so `--rules` apply
 /// (session/load would keep the old prompt).
 #[tauri::command]
@@ -1102,7 +1103,7 @@ pub async fn session_set_extra_rules(
     Ok(meta)
 }
 
-/// Set or clear per-session max agent turns (`grok --max-turns` at next spawn).
+/// Set or clear per-session max agent turns (`supercharge --max-turns` at next spawn).
 /// `None` / `0` clears (inherit global). Soft-respawns the live agent for this chat.
 #[tauri::command]
 pub async fn session_set_max_agent_turns(
@@ -1121,7 +1122,7 @@ pub async fn session_set_max_agent_turns(
 }
 
 /// Set or clear per-session system prompt override
-/// (`grok --system-prompt-override` at next spawn).
+/// (`supercharge --system-prompt-override` at next spawn).
 /// Empty / whitespace clears. Forces a fresh agent session so the override
 /// applies (session/load would keep the old prompt).
 /// Never logs the prompt body (may contain secrets / PII).

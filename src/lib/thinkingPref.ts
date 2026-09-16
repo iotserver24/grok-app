@@ -4,7 +4,7 @@
  * the user prefers expanded.
  */
 
-const STORAGE_KEY = "grok.thinkingExpanded";
+const STORAGE_KEY = "supercharge.thinkingExpanded";
 
 /** Fired on `window` after a successful save so open Thinking blocks can re-read. */
 export const THINKING_PREF_EVENT = "grok-thinking-pref";

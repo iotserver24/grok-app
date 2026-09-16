@@ -9,7 +9,7 @@
 export const MAX_ATTACHED_CHATS = 3;
 export const ATTACH_SCOPE_RECENT_TURNS = 16;
 export const ATTACH_SCOPE_FULL_TURNS = 40;
-export const RECENT_ATTACH_STORAGE_KEY = "grok.recentAttachChatIds";
+export const RECENT_ATTACH_STORAGE_KEY = "supercharge.recentAttachChatIds";
 const RECENT_ATTACH_MAX = 12;
 
 /** How much of the source journal is expanded on send. */

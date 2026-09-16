@@ -816,7 +816,7 @@ impl SessionManager {
         if !ok {
             return Err(format!("invalid effort: {effort}"));
         }
-        // Grok Build's session/load restores the old model and reasoning effort,
+        // Supercharge's session/load restores the old model and reasoning effort,
         // overriding this process's fresh spawn flags. On a real effort change,
         // force session/new; the existing journal bootstrap preserves continuity.
         if effort_changed {

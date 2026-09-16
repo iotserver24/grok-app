@@ -4,7 +4,7 @@
  * Default: off. Fail-closed outside Tauri (no-op, never throws).
  */
 
-export const WINDOW_ALWAYS_ON_TOP_STORAGE_KEY = "grok.windowAlwaysOnTop";
+export const WINDOW_ALWAYS_ON_TOP_STORAGE_KEY = "supercharge.windowAlwaysOnTop";
 
 /** Fired on `window` after a successful save (detail = boolean enabled). */
 export const WINDOW_ALWAYS_ON_TOP_CHANGE_EVENT =

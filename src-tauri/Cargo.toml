@@ -1,12 +1,12 @@
 [package]
-name = "grok-app"
+name = "supercharge-app"
 version = "0.2.35"
-description = "Grok — desktop workbench for Grok Build CLI"
-authors = ["RongleCat"]
+description = "Supercharge desktop workbench for local coding agents"
+authors = ["Supercharge contributors"]
 edition = "2021"
 
 [lib]
-name = "grok_app_lib"
+name = "supercharge_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -155,3 +155,7 @@ opt-level = 3
 # a no-op and was the residual crash path after 0.2.1 pool hardening.
 panic = "unwind"
 strip = true
+
+# Keep this Tauri application independent from the parent Supercharge workspace.
+# The desktop requires panic=unwind while the CLI workspace uses panic=abort.
+[workspace]

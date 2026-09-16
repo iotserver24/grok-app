@@ -43,13 +43,6 @@ describe("wallpaperSource", () => {
       "catalog_recovery_invalid",
     );
     expect(parseWallpaperSourceError("timeout")).toBe("timeout");
-    expect(parseWallpaperSourceError("imagine_failed")).toBe("imagine_failed");
-    expect(parseWallpaperSourceError("imagine_zdr_unavailable")).toBe(
-      "imagine_zdr_unavailable",
-    );
-    expect(parseWallpaperSourceError("wallpaper_imagine: boom")).toBe(
-      "imagine_failed",
-    );
     expect(parseWallpaperSourceError("delete_failed: EPERM")).toBe("generic");
     expect(parseWallpaperSourceError("something else")).toBe("generic");
   });
@@ -58,9 +51,6 @@ describe("wallpaperSource", () => {
     expect(
       errorCodeFromSearchResult({ items: [], errorCode: "auth_required" }),
     ).toBe("auth_required");
-    expect(
-      errorCodeFromSearchResult({ items: [], errorCode: "imagine_failed" }),
-    ).toBe("imagine_failed");
     expect(
       errorCodeFromSearchResult({ items: [], errorCode: "timeout" }),
     ).toBe("timeout");
@@ -239,25 +229,25 @@ describe("wallpaperSource", () => {
   it("maps library entries to gallery items (static first)", () => {
     const entries: WallpaperLibraryEntry[] = [
       {
-        path: "/w/imagine/2026-08-01/b.mp4",
+        path: "/w/library/2026-08-01/b.mp4",
         name: "b.mp4",
-        source: "imagine",
+        source: "library",
         kind: "video",
         bytes: 10,
         modifiedMs: 200,
       },
       {
-        path: "/w/x/2026-08-01/a.jpg",
+        path: "/w/openverse/2026-08-01/a.jpg",
         name: "a.jpg",
-        source: "x",
+        source: "openverse",
         kind: "image",
         bytes: 5,
         modifiedMs: 100,
       },
       {
-        path: "/w/imagine/2026-08-01/c.png",
+        path: "/w/pexels/2026-08-01/c.png",
         name: "c.png",
-        source: "imagine",
+        source: "pexels",
         kind: "image",
         bytes: 8,
         modifiedMs: 300,
@@ -276,17 +266,17 @@ describe("wallpaperSource", () => {
 
     const items = libraryEntriesToGalleryItems(entries);
     expect(items.map((i) => i.localPath)).toEqual([
-      "/w/imagine/2026-08-01/c.png",
-      "/w/x/2026-08-01/a.jpg",
-      "/w/imagine/2026-08-01/b.mp4",
+      "/w/pexels/2026-08-01/c.png",
+      "/w/openverse/2026-08-01/a.jpg",
+      "/w/library/2026-08-01/b.mp4",
     ]);
-    expect(items[0]!.source).toBe("imagine");
+    expect(items[0]!.source).toBe("pexels");
     expect(items[0]!.kind).toBe("image");
     expect(items[2]!.kind).toBe("video");
 
     const one = libraryEntryToGalleryItem(entries[1]!);
-    expect(one.localPath).toBe("/w/x/2026-08-01/a.jpg");
-    expect(one.fullUrl).toBe("file:///w/x/2026-08-01/a.jpg");
+    expect(one.localPath).toBe("/w/openverse/2026-08-01/a.jpg");
+    expect(one.fullUrl).toBe("file:///w/openverse/2026-08-01/a.jpg");
   });
 
   it("uses catalog metadata when mapping a library entry", () => {

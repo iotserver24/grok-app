@@ -1,8 +1,8 @@
-//! Grok Build **agent leader** process management for Settings → Runtime.
+//! Supercharge **agent leader** process management for Settings → Runtime.
 //!
-//! CLI surface (verified against current Grok Build):
+//! CLI surface (verified against current Supercharge):
 //! - `grok agent leader` — long-running shared backend (Unix socket)
-//! - `grok leader list --json` / `kill` / `info`
+//! - `supercharge leader list --json` / `kill` / `info`
 //! - Default socket: `~/.grok/leader.sock` (override: `GROK_LEADER_SOCKET` or `--leader-socket`)
 //!
 //! The app may spawn a background leader and track its PID for stop; externally
@@ -40,7 +40,7 @@ struct TrackedLeader {
     started_at_unix: u64,
 }
 
-/// One row from `grok leader list --json` (fields vary by CLI version).
+/// One row from `supercharge leader list --json` (fields vary by CLI version).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LeaderProcessDto {
@@ -57,7 +57,7 @@ pub struct LeaderProcessDto {
     pub raw: Option<serde_json::Value>,
 }
 
-/// Details from `grok leader info --json` (fields vary by CLI version).
+/// Details from `supercharge leader info --json` (fields vary by CLI version).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LeaderInfoDto {
@@ -99,7 +99,7 @@ pub struct LeaderStatusDto {
     pub cli_supports_leader: bool,
     /// Honest message when CLI cannot run leader, or last error.
     pub message: Option<String>,
-    /// Leaders from `grok leader list --json` (may be empty if CLI probe fails).
+    /// Leaders from `supercharge leader list --json` (may be empty if CLI probe fails).
     pub leaders: Vec<LeaderProcessDto>,
     /// Optional serve bind (informational; secrets always masked if present).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -147,7 +147,7 @@ pub fn mask_secret(value: &str) -> String {
     format!("••••{visible}")
 }
 
-/// Pure parse helper for `grok leader list --json`.
+/// Pure parse helper for `supercharge leader list --json`.
 pub fn parse_leader_list_json(stdout: &str) -> Result<Vec<LeaderProcessDto>, String> {
     let trimmed = stdout.trim();
     if trimmed.is_empty() {
@@ -245,7 +245,7 @@ fn json_str(v: &serde_json::Value, keys: &[&str]) -> Option<String> {
     None
 }
 
-/// Pure parse helper for `grok leader info --json`.
+/// Pure parse helper for `supercharge leader info --json`.
 pub fn parse_leader_info_json(stdout: &str) -> Result<LeaderInfoDto, String> {
     let trimmed = stdout.trim();
     if trimmed.is_empty() {
@@ -352,14 +352,14 @@ pub fn derive_leader_state(
     if !cli_found {
         return (
             "error",
-            Some("Grok Build CLI not found. Install or set the CLI path under Runtime.".into()),
+            Some("Supercharge CLI not found. Install or set the CLI path under Runtime.".into()),
         );
     }
     if !cli_supports_leader {
         return (
             "unsupported",
             Some(
-                "This Grok Build CLI version does not expose `agent leader` / `leader` commands."
+                "This Supercharge CLI version does not expose `agent leader` / `leader` commands."
                     .into(),
             ),
         );
@@ -402,7 +402,7 @@ fn run_grok_cli_args(args: &[&str], timeout_secs: u64) -> Result<(String, String
     let settings = store::load_settings();
     let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
     let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return Err("Grok Build CLI not found".into());
+        return Err("Supercharge CLI not found".into());
     };
 
     let args_owned: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
@@ -430,9 +430,9 @@ fn probe_cli_supports_leader() -> (bool, bool, Option<String>) {
     let settings = store::load_settings();
     let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
     if !probe.found {
-        return (false, false, Some("Grok Build CLI not found".into()));
+        return (false, false, Some("Supercharge CLI not found".into()));
     }
-    // Prefer `grok leader --help` (management surface); fall back to agent leader.
+    // Prefer `supercharge leader --help` (management surface); fall back to agent leader.
     match run_grok_cli_args(&["leader", "--help"], 8) {
         Ok((stdout, stderr, ok)) => {
             let blob = format!("{stdout}\n{stderr}").to_ascii_lowercase();
@@ -712,19 +712,19 @@ pub async fn leader_status() -> Result<LeaderStatusDto, String> {
         .map_err(|e| e.to_string())
 }
 
-/// List running leader processes (`grok leader list --json`). Soft-fails on old CLI.
+/// List running leader processes (`supercharge leader list --json`). Soft-fails on old CLI.
 #[tauri::command]
 pub async fn leader_list() -> Result<serde_json::Value, String> {
     let result = tauri::async_runtime::spawn_blocking(|| {
         let (cli_found, cli_supports, support_msg) = probe_cli_supports_leader();
         if !cli_found {
             return soft_list_error(
-                support_msg.unwrap_or_else(|| "Grok Build CLI not found".into()),
+                support_msg.unwrap_or_else(|| "Supercharge CLI not found".into()),
             );
         }
         if !cli_supports {
             return soft_list_error(support_msg.unwrap_or_else(|| {
-                "This Grok Build CLI version does not expose `grok leader list`.".into()
+                "This Supercharge CLI version does not expose `supercharge leader list`.".into()
             }));
         }
         match run_grok_cli_args(&["leader", "list", "--json"], LEADER_CMD_TIMEOUT_SECS) {
@@ -761,21 +761,21 @@ pub async fn leader_list() -> Result<serde_json::Value, String> {
     Ok(result)
 }
 
-/// Details for a leader process (`grok leader info --json [--pid]`). Soft-fails on old CLI.
+/// Details for a leader process (`supercharge leader info --json [--pid]`). Soft-fails on old CLI.
 #[tauri::command]
 pub async fn leader_info(pid: Option<u64>) -> Result<LeaderInfoDto, String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
         let (cli_found, cli_supports, support_msg) = probe_cli_supports_leader();
         if !cli_found {
             return soft_info_error(
-                support_msg.unwrap_or_else(|| "Grok Build CLI not found".into()),
+                support_msg.unwrap_or_else(|| "Supercharge CLI not found".into()),
                 false,
             );
         }
         if !cli_supports {
             return soft_info_error(
                 support_msg.unwrap_or_else(|| {
-                    "This Grok Build CLI version does not expose `grok leader info`.".into()
+                    "This Supercharge CLI version does not expose `supercharge leader info`.".into()
                 }),
                 true,
             );
@@ -831,7 +831,7 @@ pub async fn leader_start() -> Result<LeaderStatusDto, String> {
             return Ok(current);
         }
         if !current.cli_found {
-            return Err("Grok Build CLI not found".into());
+            return Err("Supercharge CLI not found".into());
         }
         if !current.cli_supports_leader {
             return Err(current
@@ -842,7 +842,7 @@ pub async fn leader_start() -> Result<LeaderStatusDto, String> {
         let settings = store::load_settings();
         let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
         let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-            return Err("Grok Build CLI not found".into());
+            return Err("Supercharge CLI not found".into());
         };
         let socket = default_leader_socket_path();
         if let Some(parent) = socket.parent() {
@@ -906,7 +906,7 @@ pub async fn leader_start() -> Result<LeaderStatusDto, String> {
     .map_err(|e| e.to_string())?
 }
 
-/// Stop leaders: `grok leader kill` plus tracked PID cleanup; soft-respawn if useLeader.
+/// Stop leaders: `supercharge leader kill` plus tracked PID cleanup; soft-respawn if useLeader.
 #[tauri::command]
 pub async fn leader_stop(
     app: tauri::AppHandle,
@@ -962,7 +962,7 @@ pub async fn leader_stop(
     Ok(collect_status_sync())
 }
 
-/// Stop all running leader processes (`grok leader kill`). Soft-respawns the app agent.
+/// Stop all running leader processes (`supercharge leader kill`). Soft-respawns the app agent.
 #[tauri::command]
 pub async fn leader_kill_all(
     app: tauri::AppHandle,

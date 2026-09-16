@@ -15,7 +15,7 @@ import {
 
 function memStorage(seed?: string): RimEventTimelineStorage & { data: Map<string, string> } {
   const data = new Map<string, string>();
-  if (seed) data.set("grok-app.remoteIm.eventTimeline", seed);
+  if (seed) data.set("supercharge-app.remoteIm.eventTimeline", seed);
   return {
     data,
     getItem: (k) => data.get(k) ?? null,

@@ -86,6 +86,11 @@ import {
   loadWindowAlwaysOnTopPref,
 } from "./lib/windowAlwaysOnTop";
 import { installZoomHotkeys } from "./lib/zoomHotkeys";
+import { migrateLegacyBrowserStorage } from "./lib/browserStorageMigration";
+
+// Populate the Supercharge namespace before any boot-time preference reads.
+// Existing destination values win and legacy keys remain available for rollback.
+migrateLegacyBrowserStorage(localStorage);
 
 // Apply persisted theme preference (default: system) before first React paint.
 // Optional clock schedule (under System) wins over OS scheme when enabled.

@@ -13,7 +13,7 @@ export type ThemePreference = "system" | Theme;
 /** Host → frontend when Windows `AppsUseLightTheme` flips. */
 export const OS_THEME_CHANGED_EVENT = "os-theme://changed";
 
-export const THEME_STORAGE_KEY = "grok-app.theme";
+export const THEME_STORAGE_KEY = "supercharge-app.theme";
 /** Fallback when OS scheme cannot be read (tests / SSR). */
 export const DEFAULT_RESOLVED_THEME: Theme = "dark";
 /** New installs / empty storage → follow system. */

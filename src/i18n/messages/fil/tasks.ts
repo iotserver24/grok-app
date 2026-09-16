@@ -153,7 +153,7 @@ export const filTasks = {
   "batchAgents.mode.sessions": "Buksan ang mga session",
   "batchAgents.mode.headless": "Headless na buod",
   "batchAgents.mode.sessionsHint": "Gumagawa ng chat ng App bawat proyekto, ikinokonekta ang agent, at ipinapadala ang prompt (nakapila sa multi-session concurrency). Soft-fail ang hindi pinagkakatiwalaan / nawawalang path.",
-  "batchAgents.mode.headlessHint": "Nagpapatakbo ng one-shot `grok -p` bawat proyekto na may maluwag na timeout. Lumabas ang mga resulta bilang talahanayan ng buod — walang session ng App. Soft-fail kapag nawawala ang CLI / timeout / walang output.",
+  "batchAgents.mode.headlessHint": "Nagpapatakbo ng one-shot `supercharge -p` bawat proyekto na may maluwag na timeout. Lumabas ang mga resulta bilang talahanayan ng buod — walang session ng App. Soft-fail kapag nawawala ang CLI / timeout / walang output.",
   "batchAgents.promptLabel": "Nakabahaging prompt",
   "batchAgents.promptPlaceholder": "hal. Suriin ang bukas na TODO at ibuod ang panganib sa repo na ito…",
   "batchAgents.searchPlaceholder": "I-filter ang mga proyekto…",

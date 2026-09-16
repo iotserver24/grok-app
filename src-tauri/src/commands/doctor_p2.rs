@@ -72,8 +72,7 @@ pub async fn export_bytes_save(
         };
 
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("create parent dir: {e}"))?;
+            std::fs::create_dir_all(parent).map_err(|e| format!("create parent dir: {e}"))?;
         }
         std::fs::write(&path, &bytes).map_err(|e| format!("write file: {e}"))?;
 
@@ -168,7 +167,7 @@ fn save_and_reveal_file_blocking(
 }
 
 /// Wipe App data under the data root (sessions, projects, settings).
-/// Does not touch the CLI home (`~/.grok`). Double-confirm in the UI before calling.
+/// Does not touch the CLI home (`~/.supercharge`). Double-confirm in the UI before calling.
 #[tauri::command]
 pub async fn reset_app_data(
     app: tauri::AppHandle,
@@ -181,7 +180,7 @@ pub async fn reset_app_data(
     crate::support_bundle::reset_app_data(keep)
 }
 
-// ── Skills / MCP via `grok inspect --json` ──────────────────────────────────
+// ── Skills / MCP via `supercharge inspect --json` ───────────────────────────
 
 const INSPECT_TIMEOUT_SECS: u64 = 12;
 
@@ -215,32 +214,31 @@ pub struct McpDto {
     pub compatibility_status: Option<String>,
 }
 
-/// Run probed CLI: `grok inspect --json` with optional project cwd.
+/// Run the discovered Supercharge CLI: `supercharge inspect --json` with optional project cwd.
 /// Returns (parsed JSON, error message). Never panics; empty on failure.
 fn run_grok_inspect(project_path: Option<&str>) -> (Option<serde_json::Value>, Option<String>) {
     let settings = store::load_settings();
     let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
     let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return (None, Some("Grok Build CLI not found".into()));
+        return (None, Some("Supercharge CLI not found".into()));
     };
 
     let cwd = project_path
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(std::path::PathBuf::from);
+    let supercharge_home =
+        crate::paths::resolve_agent_supercharge_home(&settings.session_data_mode);
 
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let mut cmd = std::process::Command::new(&cli_path);
         cmd.arg("inspect").arg("--json");
-        cmd.env("GROK_HOME", crate::skill_compat::inspect_grok_home());
+        cmd.env("SUPERCHARGE_HOME", &supercharge_home);
         if let Some(dir) = cwd {
             cmd.current_dir(dir);
         }
-        crate::process_util::apply_no_window_std(&mut cmd);
-        if let Some(path_env) = crate::process_util::enriched_path_env() {
-            cmd.env("PATH", path_env);
-        }
+        crate::process_util::apply_cli_env_std(&mut cmd);
         let result = cmd.output();
         let _ = tx.send(result);
     });
@@ -250,7 +248,7 @@ fn run_grok_inspect(project_path: Option<&str>) -> (Option<serde_json::Value>, O
             if !output.status.success() {
                 let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
                 let msg = if err.is_empty() {
-                    format!("grok inspect exited with {}", output.status)
+                    format!("supercharge inspect exited with {}", output.status)
                 } else {
                     // Truncate; never log secrets (inspect should not print keys)
                     err.chars().take(400).collect()
@@ -260,13 +258,22 @@ fn run_grok_inspect(project_path: Option<&str>) -> (Option<serde_json::Value>, O
             let stdout = String::from_utf8_lossy(&output.stdout);
             match serde_json::from_str::<serde_json::Value>(stdout.trim()) {
                 Ok(v) => (Some(v), None),
-                Err(e) => (None, Some(format!("Failed to parse grok inspect JSON: {e}"))),
+                Err(e) => (
+                    None,
+                    Some(format!("Failed to parse Supercharge inspect JSON: {e}")),
+                ),
             }
         }
-        Ok(Err(e)) => (None, Some(format!("Failed to run grok inspect: {e}"))),
-        Err(_) => (None, Some(format!(
-            "grok inspect timed out after {INSPECT_TIMEOUT_SECS}s"
-        ))),
+        Ok(Err(e)) => (
+            None,
+            Some(format!("Failed to run Supercharge inspect: {e}")),
+        ),
+        Err(_) => (
+            None,
+            Some(format!(
+                "Supercharge inspect timed out after {INSPECT_TIMEOUT_SECS}s"
+            )),
+        ),
     }
 }
 
@@ -370,7 +377,7 @@ const PROJECT_SKILLS_SCAN_MAX: usize = 500;
 /// Soft cap for reading a single SKILL.md when scanning project skills.
 const PROJECT_SKILL_MD_READ_MAX: usize = 64 * 1024;
 
-/// Pure: project skills root `{project}/.grok/skills` when path is non-empty.
+/// Pure: project skills root `{project}/.supercharge/skills` when path is non-empty.
 fn project_skills_dir(project_path: Option<&str>) -> Option<std::path::PathBuf> {
     let raw = project_path.map(str::trim).filter(|s| !s.is_empty())?;
     if raw.contains('\0') {
@@ -378,10 +385,12 @@ fn project_skills_dir(project_path: Option<&str>) -> Option<std::path::PathBuf> 
     }
     let p = std::path::Path::new(raw);
     // Reject obvious traversal in the project path string itself.
-    if p.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+    if p.components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
         return None;
     }
-    Some(p.join(".grok").join("skills"))
+    Some(p.join(".supercharge").join("skills"))
 }
 
 /// Pure: simple SKILL.md frontmatter (`---` … `---`) key:value lines.
@@ -441,8 +450,8 @@ fn parse_skill_md_frontmatter_meta(content: &str) -> (Option<String>, String, bo
     (name, description, user_invocable)
 }
 
-/// Scan `{project}/.grok/skills/*/SKILL.md` on disk (one level).
-/// Independent of `grok inspect` so project skills still appear when CLI
+/// Scan `{project}/.supercharge/skills/*/SKILL.md` on disk (one level).
+/// Independent of `supercharge inspect` so project skills still appear when CLI
 /// inspect is slow, partial, or missing project entries.
 fn scan_project_skills(project_path: Option<&str>) -> Vec<SkillDto> {
     let Some(root) = project_skills_dir(project_path) else {
@@ -520,10 +529,7 @@ fn scan_project_skills(project_path: Option<&str>) -> Vec<SkillDto> {
 /// Merge inspect skills with project-disk skills.
 /// Same name (case-insensitive): **project wins** over global/user/plugin/bundled.
 /// Project scan also fills gaps when inspect omitted project skills.
-fn merge_skills_prefer_project(
-    inspect: Vec<SkillDto>,
-    project: Vec<SkillDto>,
-) -> Vec<SkillDto> {
+fn merge_skills_prefer_project(inspect: Vec<SkillDto>, project: Vec<SkillDto>) -> Vec<SkillDto> {
     let mut map: std::collections::HashMap<String, SkillDto> =
         std::collections::HashMap::with_capacity(inspect.len() + project.len());
     for s in inspect {
@@ -556,9 +562,12 @@ mod skill_project_scan_tests {
     use std::io::Write;
 
     #[test]
-    fn project_skills_dir_joins_dot_grok_skills() {
+    fn project_skills_dir_joins_dot_supercharge_skills() {
         let d = project_skills_dir(Some("/tmp/demo")).unwrap();
-        assert!(d.ends_with(std::path::Path::new(".grok/skills")) || d.ends_with(".grok\\skills"));
+        assert!(
+            d.ends_with(std::path::Path::new(".supercharge/skills"))
+                || d.ends_with(".supercharge\\skills")
+        );
         assert!(project_skills_dir(Some("")).is_none());
         assert!(project_skills_dir(None).is_none());
         assert!(project_skills_dir(Some("/tmp/../evil")).is_none());
@@ -652,11 +661,11 @@ mod skill_project_scan_tests {
     #[test]
     fn scan_project_skills_reads_disk() {
         let dir = std::env::temp_dir().join(format!(
-            "grok-project-skills-scan-{}",
+            "supercharge-project-skills-scan-{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&dir);
-        let skill_dir = dir.join(".grok").join("skills").join("disk-skill");
+        let skill_dir = dir.join(".supercharge").join("skills").join("disk-skill");
         std::fs::create_dir_all(&skill_dir).unwrap();
         let md = skill_dir.join("SKILL.md");
         let mut f = std::fs::File::create(&md).unwrap();
@@ -681,29 +690,31 @@ mod skill_project_scan_tests {
     fn plugin_name_from_skill_path_markers() {
         assert_eq!(
             plugin_name_from_skill_path(Some(
-                "/Users/me/.grok/installed-plugins/agent-plugin-codex/skills/x/SKILL.md"
+                "/Users/me/.supercharge/installed-plugins/agent-plugin-codex/skills/x/SKILL.md"
             ))
             .as_deref(),
             Some("agent-plugin-codex")
         );
         assert_eq!(
             plugin_name_from_skill_path(Some(
-                "/Users/me/.grok/plugins/foo/skills/bar/SKILL.md"
+                "/Users/me/.supercharge/plugins/foo/skills/bar/SKILL.md"
             ))
             .as_deref(),
             Some("foo")
         );
         assert_eq!(
-            plugin_name_from_skill_path(Some(r"D:\work\.grok\plugins\pdf\skills\a\SKILL.md"))
-                .as_deref(),
+            plugin_name_from_skill_path(Some(
+                r"D:\work\.supercharge\plugins\pdf\skills\a\SKILL.md"
+            ))
+            .as_deref(),
             Some("pdf")
         );
         assert_eq!(
-            plugin_name_from_skill_path(Some("/Users/me/.grok/skills/help/SKILL.md")),
+            plugin_name_from_skill_path(Some("/Users/me/.supercharge/skills/help/SKILL.md")),
             None
         );
         assert_eq!(
-            plugin_name_from_skill_path(Some("/Users/me/.grok/bundled/skills/pdf/SKILL.md")),
+            plugin_name_from_skill_path(Some("/Users/me/.supercharge/bundled/skills/pdf/SKILL.md")),
             None
         );
     }

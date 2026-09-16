@@ -26,7 +26,7 @@ export type StallHistoryEntry = {
   at: number;
 };
 
-export const STALL_HISTORY_STORAGE_KEY = "grok.stallHistory";
+export const STALL_HISTORY_STORAGE_KEY = "supercharge.stallHistory";
 /** Cap for historical stall signals (localStorage ring, newest first). */
 export const STALL_HISTORY_MAX = 40;
 /** Cap stored title length — no multi-kb blobs. */

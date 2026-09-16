@@ -1,4 +1,4 @@
-//! `grok://` / `grok-app://` parse + last-write-wins pending import slot.
+//! Supercharge skin-link parsing with legacy `grok://` / `grok-app://` aliases.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -133,7 +133,11 @@ pub fn parse_skin_import_uri(raw: &str) -> ParseResult {
         return ParseResult::Err("no_scheme");
     };
     let scheme = scheme.to_ascii_lowercase();
-    if scheme != "grok" && scheme != "grok-app" {
+    if scheme != "supercharge"
+        && scheme != "supercharge-app"
+        && scheme != "grok"
+        && scheme != "grok-app"
+    {
         return ParseResult::Err("scheme");
     }
     let mut rest = rest0;
@@ -236,10 +240,10 @@ pub fn set_pending_and_emit(app: &AppHandle, next: PendingSkinImport) {
     }
 }
 
-pub fn is_grokskin_path(p: &Path) -> bool {
+pub fn is_skin_pack_path(p: &Path) -> bool {
     p.extension()
         .and_then(|e| e.to_str())
-        .map(|e| e.eq_ignore_ascii_case("grokskin"))
+        .map(|e| e.eq_ignore_ascii_case("superchargeskin") || e.eq_ignore_ascii_case("grokskin"))
         .unwrap_or(false)
 }
 
@@ -252,7 +256,7 @@ pub fn ingest_opened_url(app: &AppHandle, url: &url::Url) {
                 .ok()
                 .or_else(|| url.to_string().strip_prefix("file://").map(PathBuf::from));
             if let Some(path) = path {
-                if is_grokskin_path(&path) {
+                if is_skin_pack_path(&path) {
                     set_pending_and_emit(
                         app,
                         PendingSkinImport::File {
@@ -262,7 +266,7 @@ pub fn ingest_opened_url(app: &AppHandle, url: &url::Url) {
                 }
             }
         }
-        "grok" | "grok-app" => {
+        "supercharge" | "supercharge-app" | "grok" | "grok-app" => {
             ingest_uri_string(app, url.as_str());
         }
         _ => {}
@@ -294,9 +298,11 @@ pub fn ingest_argv(args: &[String]) -> (ArgvIngest, Option<PendingSkinImport>) {
     }
     let mut last = None;
     for a in args {
-        if a.starts_with("grok:")
-            || a.starts_with("GROK:")
-            || a.to_ascii_lowercase().starts_with("grok-app:")
+        let lower = a.to_ascii_lowercase();
+        if lower.starts_with("supercharge:")
+            || lower.starts_with("supercharge-app:")
+            || lower.starts_with("grok:")
+            || lower.starts_with("grok-app:")
         {
             match parse_skin_import_uri(a) {
                 ParseResult::Url(href) => last = Some(PendingSkinImport::Url { href }),
@@ -306,7 +312,7 @@ pub fn ingest_argv(args: &[String]) -> (ArgvIngest, Option<PendingSkinImport>) {
             continue;
         }
         let p = PathBuf::from(a);
-        if is_grokskin_path(&p) {
+        if is_skin_pack_path(&p) {
             last = Some(PendingSkinImport::File {
                 path: p.display().to_string(),
             });
@@ -420,11 +426,13 @@ mod tests {
     }
 
     #[test]
-    fn grokskin_accepted_zip_rejected() {
-        assert!(is_grokskin_path(Path::new("/tmp/a.grokskin")));
-        assert!(is_grokskin_path(Path::new("/tmp/A.GROKSKIN")));
-        assert!(!is_grokskin_path(Path::new("/tmp/a.zip")));
-        assert!(!is_grokskin_path(Path::new("/tmp/no-suffix")));
+    fn supercharge_and_legacy_skin_extensions_are_accepted() {
+        assert!(is_skin_pack_path(Path::new("/tmp/a.superchargeskin")));
+        assert!(is_skin_pack_path(Path::new("/tmp/A.SUPERCHARGESKIN")));
+        assert!(is_skin_pack_path(Path::new("/tmp/a.grokskin")));
+        assert!(is_skin_pack_path(Path::new("/tmp/A.GROKSKIN")));
+        assert!(!is_skin_pack_path(Path::new("/tmp/a.zip")));
+        assert!(!is_skin_pack_path(Path::new("/tmp/no-suffix")));
         let args = vec!["app".into(), "/tmp/foo.zip".into()];
         let (k, p) = ingest_argv(&args);
         assert_eq!(k, ArgvIngest::None);
@@ -432,11 +440,11 @@ mod tests {
     }
 
     #[test]
-    fn fire_due_wins_over_grok() {
+    fn fire_due_wins_over_skin_link() {
         let args = vec![
             "app".into(),
             crate::automation_runner::FIRE_DUE_FLAG.to_string(),
-            "grok://skin/import?url=https%3A%2F%2Fskins.example%2Fp.grokskin".into(),
+            "supercharge://skin/import?url=https%3A%2F%2Fskins.example%2Fp.superchargeskin".into(),
         ];
         let (k, p) = ingest_argv(&args);
         assert_eq!(k, ArgvIngest::FireDue);

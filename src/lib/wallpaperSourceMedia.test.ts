@@ -1,21 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  fetchAlbum: vi.fn(),
   fetchRemote: vi.fn(),
-  fetchMedia: vi.fn(),
   remember: vi.fn(),
 }));
 
-vi.mock("@/lib/grokAlbumMedia", () => ({
-  fetchGrokAlbumMedia: mocks.fetchAlbum,
-  cancelGrokAlbumMediaRequests: vi.fn(),
-}));
 vi.mock("@/lib/api", () => ({
   wallpaperRemoteFetchMedia: mocks.fetchRemote,
   wallpaperRemoteCancelMediaRequests: vi.fn(async () => 0),
   wallpaperRemoteCancelAllMediaRequests: vi.fn(async () => 0),
-  wallpaperFetchMedia: mocks.fetchMedia,
   wallpaperLibraryRemember: mocks.remember,
 }));
 
@@ -111,24 +104,16 @@ describe("ensureLocalWallpaperMedia", () => {
     expect(mocks.remember).not.toHaveBeenCalled();
   });
 
-  it("does not report success when the catalog write fails", async () => {
-    mocks.fetchMedia.mockResolvedValue({
-      path: "C:/wallpapers/x.jpg",
-      name: "x.jpg",
-      mime: "image/jpeg",
-    });
-    mocks.remember.mockRejectedValue(new Error("catalog_write_failed"));
-
+  it("rejects unsupported remote sources without calling a legacy fetch route", async () => {
     await expect(
       ensureLocalWallpaperMedia({
-        id: "x",
+        id: "legacy",
         source: "x",
         kind: "image",
-        thumbUrl: "https://pbs.twimg.com/media/photo.jpg",
-        fullUrl: "https://pbs.twimg.com/media/photo.jpg",
+        thumbUrl: "https://example.test/thumb.jpg",
+        fullUrl: "https://example.test/original.jpg",
       }),
-    ).rejects.toThrow("catalog_write_failed");
-    expect(mocks.fetchMedia).toHaveBeenCalledTimes(1);
-    expect(mocks.remember).toHaveBeenCalledTimes(1);
+    ).rejects.toThrow("url_blocked");
+    expect(mocks.remember).not.toHaveBeenCalled();
   });
 });

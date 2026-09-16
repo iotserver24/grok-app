@@ -253,7 +253,7 @@ impl SessionManager {
         drop(_focus_guard);
         // Host side-channels before main model (vision first, then X). Emit tool
         // chips immediately so the UI shows waiting state instead of freezing.
-        // Copy is non-technical (no `grok -p` / command lines in chip detail).
+        // Copy is non-technical (no `supercharge -p` / command lines in chip detail).
         let locale = store::load_settings().locale;
         let zh = locale.starts_with("zh");
 

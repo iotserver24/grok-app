@@ -6,7 +6,7 @@
 
 export type MsgRailSide = "left" | "right";
 
-export const MSG_RAIL_SIDE_STORAGE_KEY = "grok.msgRailSide";
+export const MSG_RAIL_SIDE_STORAGE_KEY = "supercharge.msgRailSide";
 export const DEFAULT_MSG_RAIL_SIDE: MsgRailSide = "left";
 export const MSG_RAIL_SIDE_ATTR = "data-msg-rail-side";
 export const MSG_RAIL_SIDE_CHANGE_EVENT = "grok-msg-rail-side";

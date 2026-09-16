@@ -1,4 +1,4 @@
-//! Official Grok Build account: profile, login/logout, billing snapshot, local usage.
+//! Official Supercharge account: profile, login/logout, billing snapshot, local usage.
 //!
 //! Profile is read from `~/.grok/auth.json` (tokens remain Host-only and never cross IPC).
 //! Billing is best-effort HTTP (same field shape as CLI `/usage` / billing extension).
@@ -30,7 +30,7 @@ pub(crate) use build_oauth::{
 /// Cancellation + optional stdin for a running `grok login`.
 ///
 /// Some auth.x.ai pages show a code and ask the user to **paste it into
-/// Grok Build** (reverse of classic device-code). The App must keep stdin open
+/// Supercharge** (reverse of classic device-code). The App must keep stdin open
 /// and accept that paste while the CLI is still waiting.
 pub struct LoginProcState {
     cancel: tokio::sync::Notify,
@@ -67,7 +67,7 @@ pub async fn account_login_cancel() {
 ///
 /// **Not required for normal OAuth** — the default path still completes via
 /// browser callback / CLI poll of `auth.json`. Only some auth.x.ai sessions show
-/// “copy this code into Grok Build”; then the App can feed that line to stdin
+/// “copy this code into Supercharge”; then the App can feed that line to stdin
 /// while login remains in flight. No write happens unless the user submits.
 pub async fn account_login_submit_code(code: &str) -> Result<(), String> {
     let code = code.trim();
@@ -105,7 +105,7 @@ use crate::store;
 
 #[allow(dead_code)]
 const BILLING_CANDIDATES: &[&str] = &[
-    // Confirmed live endpoint used by Grok Build CLI billing extension.
+    // Confirmed live endpoint used by Supercharge CLI billing extension.
     "https://cli-chat-proxy.grok.com/v1/billing?format=credits",
     "https://accounts.x.ai/billing?format=credits",
     "https://code.grok.com/billing?format=credits",
@@ -787,7 +787,7 @@ fn parse_billing_json(v: &Value) -> BillingSnapshot {
             for p in arr {
                 let product = p.get("product").and_then(|x| x.as_str()).unwrap_or("");
                 if product.eq_ignore_ascii_case("GrokBuild")
-                    || product.eq_ignore_ascii_case("Grok Build")
+                    || product.eq_ignore_ascii_case("Supercharge")
                 {
                     credit_usage_percent = json_number(p.get("usagePercent"));
                     break;
@@ -815,7 +815,7 @@ fn parse_billing_json(v: &Value) -> BillingSnapshot {
     let subscription_tier =
         str_field(&["subscription_tier", "subscriptionTier", "tier"]).or_else(|| {
             if bool_field(&["isUnifiedBillingUser", "is_unified_billing_user"]) == Some(true) {
-                Some("Grok Build".into())
+                Some("Supercharge".into())
             } else {
                 None
             }
@@ -841,7 +841,7 @@ fn parse_billing_json(v: &Value) -> BillingSnapshot {
             let pct = json_number(p.get("usagePercent")).unwrap_or(0.0);
             let product_id = match name {
                 "Api" | "API" => 1,
-                "GrokBuild" | "Grok Build" => 2,
+                "GrokBuild" | "Supercharge" => 2,
                 "GrokChat" => 4,
                 _ => 0,
             };
@@ -1580,92 +1580,35 @@ pub async fn account_status(manual_cli: Option<&str>, refresh_billing: bool) -> 
 /// `include_local_usage = false` skips the heatmap / call-log walk (quota-only).
 pub async fn account_status_opts(
     manual_cli: Option<&str>,
-    refresh_billing: bool,
+    _refresh_billing: bool,
     include_local_usage: bool,
 ) -> AccountStatus {
-    let profile = read_auth_profile();
+    let profile = signed_out_profile();
     let secrets = store::load_secrets();
-    let has_official = secrets
-        .official_api_key
-        .as_ref()
-        .map(|k| !k.is_empty())
-        .unwrap_or(false);
     let has_relay = secrets
         .relay_api_key
         .as_ref()
-        .map(|k| !k.is_empty())
+        .map(|key| !key.is_empty())
         .unwrap_or(false);
     let probe = cli_probe::probe_cli(manual_cli);
-    let channel = channel_label(&profile, has_official, has_relay);
-
-    let billing = if refresh_billing {
-        if let Some(token) = read_access_token() {
-            // Quota + subscription in parallel (settings/user are cheap vs gRPC billing).
-            let (snap, sub_meta) = tokio::join!(
-                crate::supergrok_quota::fetch_quota_best_effort(&token),
-                fetch_subscription_meta(&token),
-            );
-            let mut b = billing_from_quota_snap(&snap);
-            merge_subscription_into_billing(&mut b, &sub_meta, &token);
-            if b.available || b.subscription_tier.is_some() {
-                // Cache even when only tier resolved (brand UI still works offline briefly).
-                if b.available {
-                    save_billing_cache(&b);
-                } else if let Some(mut cached) = load_billing_cache() {
-                    if cached.available {
-                        // Keep quota numbers; overlay fresh tier if we got one.
-                        if b.subscription_tier.is_some() {
-                            cached.subscription_tier = b.subscription_tier.clone();
-                        }
-                        cached.message = Some(format!(
-                            "Cached · {}",
-                            b.message.unwrap_or_else(|| "quota refresh failed".into())
-                        ));
-                        b = cached;
-                    } else {
-                        save_billing_cache(&b);
-                    }
-                } else if b.subscription_tier.is_some() {
-                    save_billing_cache(&b);
-                }
-            } else if let Some(mut cached) = load_billing_cache() {
-                if cached.available || cached.subscription_tier.is_some() {
-                    cached.message = Some(format!(
-                        "Cached · {}",
-                        b.message.unwrap_or_else(|| "refresh failed".into())
-                    ));
-                    b = cached;
-                }
-            }
-            b
-        } else if let Some(cached) = load_billing_cache() {
-            cached
-        } else {
-            BillingSnapshot {
-                available: false,
-                source: "no_token".into(),
-                message: Some("Sign in with official Grok Build to load quota.".into()),
-                manage_url: USAGE_MANAGE_URL.into(),
-                subscribe_url: SUBSCRIBE_URL.into(),
-                products: vec![],
-                ..Default::default()
-            }
-        }
-    } else if let Some(cached) = load_billing_cache() {
-        cached
+    let channel = if has_relay {
+        "provider_api_key".into()
+    } else if probe.cli_auth_present {
+        "cli_config".into()
     } else {
-        BillingSnapshot {
-            available: false,
-            source: "idle".into(),
-            message: None,
-            manage_url: USAGE_MANAGE_URL.into(),
-            subscribe_url: SUBSCRIBE_URL.into(),
-            products: vec![],
-            ..Default::default()
-        }
+        "none".into()
+    };
+    let billing = BillingSnapshot {
+        available: false,
+        source: "disabled".into(),
+        message: None,
+        manage_url: String::new(),
+        subscribe_url: String::new(),
+        products: vec![],
+        ..Default::default()
     };
 
-    // 371 days ≈ GitHub contribution year (matches grok-go heatmap).
+    // Keep local usage available without contacting any provider account service.
     // Blocking jsonl walk — never hold the async runtime. Quota-only ticks skip it.
     let (heatmap, call_logs) = if include_local_usage {
         tauri::async_runtime::spawn_blocking(|| local_usage(371, 40))
@@ -1677,7 +1620,7 @@ pub async fn account_status_opts(
 
     AccountStatus {
         profile,
-        has_official_key: has_official,
+        has_official_key: false,
         has_relay_key: has_relay,
         relay_base_url: secrets.relay_base_url,
         cli_auth_present: probe.cli_auth_present,
@@ -1687,8 +1630,8 @@ pub async fn account_status_opts(
         billing,
         heatmap,
         call_logs,
-        usage_manage_url: USAGE_MANAGE_URL.into(),
-        subscribe_url: SUBSCRIBE_URL.into(),
+        usage_manage_url: String::new(),
+        subscribe_url: String::new(),
     }
 }
 
@@ -1714,7 +1657,7 @@ pub async fn account_login(method: &str, manual_cli: Option<&str>) -> LoginResul
             return LoginResult {
                 ok: false,
                 method: method.into(),
-                message: "Grok Build CLI not found. Install or set CLI path in Settings.".into(),
+                message: "Supercharge CLI not found. Install or set CLI path in Settings.".into(),
                 device_url: None,
                 device_code: None,
                 profile: None,
@@ -1748,7 +1691,7 @@ pub async fn account_login(method: &str, manual_cli: Option<&str>) -> LoginResul
     // unless the user explicitly pastes a reverse pairing code.
     //
     // **Optional path:** keep stdin open (piped, unread) so rare
-    // “copy code into Grok Build” pages can be completed without restarting
+    // “copy code into Supercharge” pages can be completed without restarting
     // login. Leaving stdin open without writing does not replace the auto path.
     // tokio::process lets us race this against the Cancel notifier.
     let mut cmd = tokio::process::Command::new(&cli);
@@ -1882,7 +1825,7 @@ pub async fn account_login(method: &str, manual_cli: Option<&str>) -> LoginResul
             method: method.into(),
             message: format!(
                 "Sign-in timed out after {secs}s — the Grok auth endpoint could not be reached. \
-If the browser showed a code to paste into Grok Build, start sign-in again and paste it promptly \
+If the browser showed a code to paste into Supercharge, start sign-in again and paste it promptly \
 (or use Device code login)."
             ),
             device_url: None,
@@ -1935,7 +1878,7 @@ If the browser showed a code to paste into Grok Build, start sign-in again and p
     let ok = profile.signed_in;
 
     // Bind agent-home to the *current* route. Official mirrors OIDC;
-    // custom must not receive auth.json (Grok Build would send OIDC to
+    // custom must not receive auth.json (Supercharge would send OIDC to
     // the relay). Host command `account_login` also recycles warm/prewarm
     // agents after ok so connect cannot reuse a process that initialized
     // with empty/stale auth.
@@ -2122,7 +2065,7 @@ mod tests {
         assert_eq!(b.credit_usage_percent, Some(12.0));
         assert_eq!(b.prepaid_balance, Some(5.0));
         assert_eq!(b.on_demand_cap, Some(0.0));
-        assert_eq!(b.subscription_tier.as_deref(), Some("Grok Build"));
+        assert_eq!(b.subscription_tier.as_deref(), Some("Supercharge"));
         assert!(b
             .billing_period_start
             .as_deref()

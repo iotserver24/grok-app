@@ -1,13 +1,13 @@
 /**
  * Zen mode — hide left sidebar + right aside to maximize chat.
- * localStorage-only (`grok.zenMode`); remembers prior collapse state so
+ * localStorage-only (`supercharge.zenMode`); remembers prior collapse state so
  * disabling restores the layout the user had when they entered zen.
  *
  * Escape is intentionally not bound (must not steal Esc→stop generation).
  */
 
-export const ZEN_MODE_STORAGE_KEY = "grok.zenMode";
-export const ZEN_MODE_PRIOR_STORAGE_KEY = "grok.zenMode.prior";
+export const ZEN_MODE_STORAGE_KEY = "supercharge.zenMode";
+export const ZEN_MODE_PRIOR_STORAGE_KEY = "supercharge.zenMode.prior";
 
 /** Fired on `window` after a successful save (detail = boolean enabled). */
 export const ZEN_MODE_CHANGE_EVENT = "grok-zen-mode-change";

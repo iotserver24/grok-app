@@ -6,7 +6,7 @@
  * secrets / personal context).
  */
 
-export const SESSION_NOTES_STORAGE_KEY = "grok.sessionNotes";
+export const SESSION_NOTES_STORAGE_KEY = "supercharge.sessionNotes";
 
 /** Fired on `window` after a successful save (detail = sessionId keys touched or full map keys). */
 export const SESSION_NOTES_CHANGE_EVENT = "grok-session-notes-change";

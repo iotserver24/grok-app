@@ -6,8 +6,8 @@
 import { expandNerdFontAliases, joinCssFontStack } from "@/lib/cssFontFamily";
 import { TERMINAL_FONT_FAMILY, TERMINAL_FONT_STACK } from "@/lib/sideTerminalTheme";
 
-export const TERMINAL_FONT_FAMILY_STORAGE_KEY = "grok.terminalFontFamily";
-export const TERMINAL_FONT_SIZE_STORAGE_KEY = "grok.terminalFontSize";
+export const TERMINAL_FONT_FAMILY_STORAGE_KEY = "supercharge.terminalFontFamily";
+export const TERMINAL_FONT_SIZE_STORAGE_KEY = "supercharge.terminalFontSize";
 
 /** Fired on `window` after a same-tab terminal font save (storage is cross-tab only). */
 export const TERMINAL_FONT_CHANGED_EVENT = "grok:terminalFont";

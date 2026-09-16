@@ -66,12 +66,12 @@ describe("filePathCardBasenamePref", () => {
   it("reads the legacy select key when the checkbox key is absent", () => {
     expect(
       loadFilePathCardBasenamePref(
-        memoryStorage({ "grok.filePathCardLabel": "original" }),
+        memoryStorage({ "supercharge.filePathCardLabel": "original" }),
       ),
     ).toBe(false);
     expect(
       loadFilePathCardBasenamePref(
-        memoryStorage({ "grok.filePathCardLabel": "basename" }),
+        memoryStorage({ "supercharge.filePathCardLabel": "basename" }),
       ),
     ).toBe(true);
   });

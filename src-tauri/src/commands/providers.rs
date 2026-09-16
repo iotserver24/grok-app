@@ -1,16 +1,13 @@
-
-/// Scan CC Switch Grok Build providers (read-only SQLite).
+/// Scan CC Switch Supercharge providers (read-only SQLite).
 #[tauri::command]
 pub async fn providers_cc_switch_scan(
 ) -> Result<crate::cc_switch_import::CcSwitchScanResult, String> {
-    tauri::async_runtime::spawn_blocking(
-        crate::cc_switch_import::scan_cc_switch_providers,
-    )
-    .await
-    .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(crate::cc_switch_import::scan_cc_switch_providers)
+        .await
+        .map_err(|e| e.to_string())
 }
 
-/// Import selected CC Switch Grok Build providers into App custom providers.
+/// Import selected CC Switch Supercharge providers into App custom providers.
 #[tauri::command]
 pub async fn providers_cc_switch_import(
     app: tauri::AppHandle,
@@ -51,10 +48,10 @@ pub async fn providers_list() -> Result<crate::providers::ProvidersListResult, S
     .map_err(|e| e.to_string())?
 }
 
-/// Activate official Grok Build or a custom provider; returns updated list.
+/// Activate the catalog-managed default or an App-managed provider.
 ///
-/// Recycles warm agents so the next send spawns with rebound auth / config
-/// (no full app restart).
+/// Recycles warm agents so the next send uses the updated config without a
+/// full app restart. Command and DTO names stay stable for compatibility.
 #[tauri::command]
 pub async fn providers_activate(
     app: tauri::AppHandle,
@@ -63,39 +60,30 @@ pub async fn providers_activate(
     provider_id: Option<String>,
 ) -> Result<crate::providers::ProvidersListResult, String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let result =
-            crate::providers::activate_provider(&source, provider_id.as_deref())?;
-        // Composer model stays a catalog id (UI). Channel is `[models].default`.
-        // When leaving a custom route, drop stale provider ids from settings.
+        let result = crate::providers::activate_provider(&source, provider_id.as_deref())?;
+        // Keep the composer preference on a real model id. The stable
+        // `official` source value now means the catalog-managed default route.
         let mut settings = store::load_settings();
         let cur = settings.model_id.clone().unwrap_or_default();
         if result.active_source == "official" {
-            if cur.is_empty()
-                || crate::providers::is_custom_provider_id(&cur)
-                || cur == crate::providers::OFFICIAL_DEFAULT_MODEL
+            let catalog_default = crate::models_catalog::list_available_models().default_model_id;
+            if !catalog_default.is_empty()
+                && (cur.is_empty() || crate::providers::is_custom_provider_id(&cur))
             {
-                settings.model_id =
-                    Some(crate::providers::OFFICIAL_CATALOG_MODEL.into());
+                settings.model_id = Some(catalog_default);
                 let _ = store::save_settings(&settings);
             }
-        } else if result.active_source == "custom" {
-            // Keep catalog model in settings for the model picker; spawn resolves route id.
-            if cur.is_empty() || crate::providers::is_custom_provider_id(&cur) {
-                if let Some(p) = result
-                    .active_provider_id
-                    .as_ref()
-                    .and_then(|id| result.providers.iter().find(|x| x.id == *id))
-                {
-                    let upstream = p.model.trim();
-                    settings.model_id = Some(if upstream.is_empty() {
-                        crate::providers::OFFICIAL_CATALOG_MODEL.into()
-                    } else {
-                        upstream.to_string()
-                    });
-                } else {
-                    settings.model_id =
-                        Some(crate::providers::OFFICIAL_CATALOG_MODEL.into());
-                }
+        } else if result.active_source == "custom"
+            && (cur.is_empty() || crate::providers::is_custom_provider_id(&cur))
+        {
+            if let Some(upstream) = result
+                .active_provider_id
+                .as_ref()
+                .and_then(|id| result.providers.iter().find(|provider| provider.id == *id))
+                .map(|provider| provider.model.trim())
+                .filter(|model| !model.is_empty())
+            {
+                settings.model_id = Some(upstream.to_string());
                 let _ = store::save_settings(&settings);
             }
         }
@@ -104,10 +92,7 @@ pub async fn providers_activate(
     .await
     .map_err(|e| e.to_string())??;
 
-    let mode = store::load_settings_async().await.session_data_mode.clone();
-    let _ = crate::official_aux::sync_native_media_block_hook_for_current(&mode);
-    let _ = crate::extensions::sync_user_mcp_for_official_aux_inject(&mode);
-    // Parked processes keep old GROK_HOME auth/config in memory — kill them.
+    // Parked processes keep old provider config in memory — kill them.
     mgr.recycle_all_agents(&app, "provider_route").await;
     Ok(result)
 }
@@ -134,35 +119,10 @@ pub async fn providers_upsert(
     supports_vision: Option<bool>,
     extra_headers: Option<Vec<crate::providers::ProviderHeaderEntry>>,
 ) -> Result<crate::providers::ProvidersListResult, String> {
-    let normalized_provider_mode = match provider_mode.as_deref() {
-        Some(raw) => crate::providers::normalize_provider_mode(Some(raw)),
-        None => crate::providers::provider_mode_for_id(&id),
-    };
-    if normalized_provider_mode == crate::providers::PROVIDER_MODE_GROK_BUILD_PROXY {
-        if crate::providers::normalize_backend(api_backend.as_deref()) != "responses" {
-            return Err("grok_build_proxy requires api_backend=responses".into());
-        }
-        let normalized_base = crate::providers::normalize_openai_base_url(
-            &base_url,
-            "responses",
-            base_url_full_path.unwrap_or_else(|| {
-                crate::providers::provider_base_url_full_path_for_id(&id)
-            }),
-        );
-        let remote = crate::providers::list_remote_models(
-            normalized_base,
-            api_key.clone(),
-            Some(id.clone()),
-        )
-        .await?;
-        let selected = models.clone().unwrap_or_else(|| {
-            vec![crate::providers::ProviderModelEntry::named(
-                model.clone(),
-                model.clone(),
-            )]
-        });
-        crate::providers::validate_grok_build_proxy_models(&remote.models, &selected)?;
-    }
+    // Legacy provider modes are accepted on the wire but Supercharge resolves
+    // every configured provider through the same generic config contract.
+    let normalized_provider_mode =
+        crate::providers::normalize_provider_mode(provider_mode.as_deref());
     let set_default_flag = set_as_default.unwrap_or(false);
     let mutated_id = id.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -201,12 +161,10 @@ pub async fn providers_upsert(
                 let mut settings = store::load_settings();
                 // Composer shows upstream request model, not the route slug.
                 let upstream = p.model.trim();
-                settings.model_id = Some(if upstream.is_empty() {
-                    crate::providers::OFFICIAL_CATALOG_MODEL.into()
-                } else {
-                    upstream.to_string()
-                });
-                let _ = store::save_settings(&settings);
+                if !upstream.is_empty() {
+                    settings.model_id = Some(upstream.to_string());
+                    let _ = store::save_settings(&settings);
+                }
             }
         }
         Ok::<_, String>(result)
@@ -215,7 +173,7 @@ pub async fn providers_upsert(
     .map_err(|e| e.to_string())??;
 
     // Apply active-route / active-provider edits without requiring app restart.
-    // Recycle (not mere park) so parked shells cannot reopen with stale OIDC.
+    // Recycle rather than park so no process reopens with stale provider config.
     if crate::providers::provider_mutation_needs_agent_reload(
         set_default_flag,
         &mutated_id,
@@ -232,16 +190,12 @@ pub async fn providers_remove(
     mgr: State<'_, Arc<SessionManager>>,
     id: String,
 ) -> Result<crate::providers::ProvidersListResult, String> {
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        crate::providers::remove_custom_provider(&id)
-    })
-    .await
-    .map_err(|e| e.to_string())??;
-    // Removing a provider (esp. the active one) must not leave warm agents on
-    // a deleted route id.
-    let mode = store::load_settings_async().await.session_data_mode.clone();
-    let _ = crate::official_aux::sync_native_media_block_hook_for_current(&mode);
-    let _ = crate::extensions::sync_user_mcp_for_official_aux_inject(&mode);
+    let result =
+        tauri::async_runtime::spawn_blocking(move || crate::providers::remove_custom_provider(&id))
+            .await
+            .map_err(|e| e.to_string())??;
+    // Removing a provider (especially the active one) must not leave warm agents
+    // on a deleted route id.
     mgr.recycle_all_agents(&app, "provider_route").await;
     Ok(result)
 }
@@ -252,41 +206,37 @@ pub async fn providers_set_default(
     mgr: State<'_, Arc<SessionManager>>,
     model_id: String,
 ) -> Result<crate::providers::ProvidersListResult, String> {
-    // Prefer activate_provider so auth material is rebound correctly.
     let result = tauri::async_runtime::spawn_blocking(move || {
         let id = model_id.trim().to_string();
+        if id.is_empty() {
+            return Err("modelId is required".into());
+        }
         let list = crate::providers::list_custom_providers()?;
-        let result = if list.providers.iter().any(|p| p.id == id) {
+        let result = if list.providers.iter().any(|provider| provider.id == id) {
             crate::providers::activate_provider("custom", Some(&id))?
         } else {
-            crate::providers::activate_provider("official", None)?
+            crate::providers::set_default_model_id(&id)?
         };
         let mut settings = store::load_settings();
-        if result.active_source == "custom" {
-            if let Some(p) = result
-                .active_provider_id
-                .as_ref()
-                .and_then(|pid| result.providers.iter().find(|x| x.id == *pid))
-            {
-                let upstream = p.model.trim();
-                settings.model_id = Some(if upstream.is_empty() {
-                    crate::providers::OFFICIAL_CATALOG_MODEL.into()
-                } else {
-                    upstream.to_string()
-                });
-            }
-        } else {
-            settings.model_id = Some(crate::providers::OFFICIAL_CATALOG_MODEL.into());
-        }
+        let selected_model = result
+            .active_provider_id
+            .as_ref()
+            .and_then(|provider_id| {
+                result
+                    .providers
+                    .iter()
+                    .find(|provider| provider.id == *provider_id)
+            })
+            .map(|provider| provider.model.trim())
+            .filter(|model| !model.is_empty())
+            .unwrap_or(id.as_str());
+        settings.model_id = Some(selected_model.to_string());
         let _ = store::save_settings(&settings);
         Ok::<_, String>(result)
     })
     .await
     .map_err(|e| e.to_string())??;
 
-    let mode = store::load_settings_async().await.session_data_mode.clone();
-    let _ = crate::official_aux::sync_native_media_block_hook_for_current(&mode);
-    let _ = crate::extensions::sync_user_mcp_for_official_aux_inject(&mode);
     mgr.recycle_all_agents(&app, "provider_route").await;
     Ok(result)
 }
@@ -396,7 +346,7 @@ pub async fn models_aux_reset_defaults(
     Ok(result)
 }
 
-/// Independent side-channel: `grok -p -m <aux>` under agent-home (not live session model).
+/// Independent side-channel: `supercharge -p -m <aux>` under agent-home (not live session model).
 #[tauri::command]
 pub async fn models_aux_headless(
     model_id: String,
@@ -566,12 +516,8 @@ mod project_inspect_tests {
             }],
             "permissions": { "loaded": 0, "sources": [], "managedSettingsActive": false }
         });
-        let out = build_project_inspect_summary(
-            Some(&raw),
-            Some("/tmp/p"),
-            None,
-            vec!["grok-4".into()],
-        );
+        let out =
+            build_project_inspect_summary(Some(&raw), Some("/tmp/p"), None, vec!["grok-4".into()]);
         let s = out.to_string();
         assert!(s.contains("\"help\""));
         assert!(s.contains("\"ctx\""));
@@ -599,10 +545,10 @@ mod project_inspect_tests {
         let out = build_project_inspect_summary(
             None,
             Some("/tmp/p"),
-            Some("Grok Build CLI not found".into()),
+            Some("Supercharge CLI not found".into()),
             vec![],
         );
         assert_eq!(out["skills"]["total"], 0);
-        assert_eq!(out["error"], "Grok Build CLI not found");
+        assert_eq!(out["error"], "Supercharge CLI not found");
     }
 }

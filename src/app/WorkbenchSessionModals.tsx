@@ -61,7 +61,6 @@ export type WorkbenchSessionModalsProps = {
 
 export function WorkbenchSessionModals(p: WorkbenchSessionModalsProps) {
   const {
-    account,
     agentDashboardOpen,
     agentDashboardRows,
     batchAgentsOpen,
@@ -75,7 +74,6 @@ export function WorkbenchSessionModals(p: WorkbenchSessionModalsProps) {
     confirmClearPlanHistory,
     confirmClearSessionNoteModal,
     confirmRewindToPrompt,
-    customRouteActive,
     effectiveProjectPath,
     effort,
     forceCloseSessionNoteModal,
@@ -227,8 +225,6 @@ export function WorkbenchSessionModals(p: WorkbenchSessionModalsProps) {
         locale={locale}
         sessionId={session.sessionId}
         spend={sessionSpend}
-        account={account}
-        customRoute={customRouteActive}
         turnActive={
           session.state === "streaming" ||
           session.state === "awaiting_permission"

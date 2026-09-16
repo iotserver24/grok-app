@@ -8,7 +8,7 @@
  */
 
 export const SESSION_MRU_MAX = 20;
-export const SESSION_MRU_STORAGE_KEY = "grok.sessionMru";
+export const SESSION_MRU_STORAGE_KEY = "supercharge.sessionMru";
 
 export type SessionMruDir = "next" | "prev";
 

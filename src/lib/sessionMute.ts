@@ -7,7 +7,7 @@
  * desktop notify boundary).
  */
 
-export const SESSION_MUTE_STORAGE_KEY = "grok.sessionMute";
+export const SESSION_MUTE_STORAGE_KEY = "supercharge.sessionMute";
 
 /** Fired on `window` after a successful save (detail = string[] of muted ids). */
 export const SESSION_MUTE_CHANGE_EVENT = "grok-session-mute-change";

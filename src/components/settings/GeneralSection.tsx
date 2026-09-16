@@ -73,7 +73,6 @@ import {
 import { saveComposerDraftStatsPref } from "@/lib/draftStats";
 import { saveComposerSpellcheck } from "@/lib/composerSpellcheck";
 import { COMPOSER_MIN_ROWS_OPTIONS } from "@/lib/composerMinRows";
-import { saveVoiceHotkeyEnabled } from "@/lib/voiceHotkeyPref";
 import { saveStopAllSkipConfirmPref } from "@/lib/stopAllSkipConfirmPref";
 import { saveAlwaysQuitWithoutAskingPref } from "@/lib/confirmQuit";
 import { normalizeHHmm } from "@/lib/notifyQuietHours";
@@ -187,8 +186,6 @@ export function GeneralSection() {
     onTwoPassCompactionEnabled,
     onUseLeader,
     onVoiceDictationAutoSend,
-    onVoiceId,
-    onVoiceKeepAgentsOnEnd,
     sttEngine,
     onSttEngine,
     sttCustomBaseUrl,
@@ -222,7 +219,6 @@ export function GeneralSection() {
     setComposerSpellcheck,
     setSectionTab,
     setStopAllSkipConfirm,
-    setVoiceHotkeyEnabled,
     showSettingsToast,
     stopAllSkipConfirm,
     storeApiKeysInKeychain = false,
@@ -238,9 +234,6 @@ export function GeneralSection() {
     twoPassCompactionEnabled,
     useLeader,
     voiceDictationAutoSend,
-    voiceHotkeyEnabled,
-    voiceId,
-    voiceKeepAgentsOnEnd,
     windowAlwaysOnTop,
     workspaceCwd,
   } = s;
@@ -1867,64 +1860,6 @@ export function GeneralSection() {
             <>
             <h2 className="settings-page__h2">{t("settings.section.voice")}</h2>
             <div className="settings-card" id="settings-voice-card">
-              <div
-                className={
-                  "settings-row" +
-                  rowHighlight("settings-anchor-voiceHotkeyEnabled")
-                }
-                id="settings-anchor-voiceHotkeyEnabled"
-              >
-                <div className="settings-row__text">
-                  <div className="settings-row__label">
-                    {t("settings.voiceHotkeyEnabled")}
-                  </div>
-                  <div className="settings-row__desc">
-                    {t("settings.voiceHotkeyEnabledDesc")}
-                  </div>
-                </div>
-                <UiCheck
-                  checked={voiceHotkeyEnabled}
-                  onChange={() => {
-                    const next = !voiceHotkeyEnabled;
-                    setVoiceHotkeyEnabled(next);
-                    saveVoiceHotkeyEnabled(next);
-                  }}
-                  ariaLabel={t("settings.voiceHotkeyEnabled")}
-                />
-              </div>
-              {onVoiceId ? (
-                <div
-                  className={
-                    "settings-row settings-row--stack" +
-                    rowHighlight("settings-anchor-voiceId")
-                  }
-                  id="settings-anchor-voiceId"
-                >
-                  <div className="settings-row__text">
-                    <div className="settings-row__label">
-                      {t("settings.voiceId")}
-                    </div>
-                    <div className="settings-row__desc">
-                      {t("settings.voiceIdDesc")}
-                    </div>
-                  </div>
-                  <Select
-                    value={voiceId || "eve"}
-                    onChange={(v) => onVoiceId(v)}
-                    options={[
-                      { value: "eve", label: "Eve" },
-                      { value: "ara", label: "Ara" },
-                      { value: "rex", label: "Rex" },
-                      { value: "sal", label: "Sal" },
-                      { value: "leo", label: "Leo" },
-                      ...(voiceId &&
-                      !["eve", "ara", "rex", "sal", "leo"].includes(voiceId)
-                        ? [{ value: voiceId, label: voiceId }]
-                        : []),
-                    ]}
-                  />
-                </div>
-              ) : null}
               {onVoiceDictationAutoSend ? (
                 <div
                   className={
@@ -1947,31 +1882,6 @@ export function GeneralSection() {
                       onVoiceDictationAutoSend(!voiceDictationAutoSend)
                     }
                     ariaLabel={t("settings.voiceDictationAutoSend")}
-                  />
-                </div>
-              ) : null}
-              {onVoiceKeepAgentsOnEnd ? (
-                <div
-                  className={
-                    "settings-row" +
-                    rowHighlight("settings-anchor-voiceKeepAgentsOnEnd")
-                  }
-                  id="settings-anchor-voiceKeepAgentsOnEnd"
-                >
-                  <div className="settings-row__text">
-                    <div className="settings-row__label">
-                      {t("settings.voiceKeepAgentsOnEnd")}
-                    </div>
-                    <div className="settings-row__desc">
-                      {t("settings.voiceKeepAgentsOnEndDesc")}
-                    </div>
-                  </div>
-                  <UiCheck
-                    checked={!!voiceKeepAgentsOnEnd}
-                    onChange={() =>
-                      onVoiceKeepAgentsOnEnd(!voiceKeepAgentsOnEnd)
-                    }
-                    ariaLabel={t("settings.voiceKeepAgentsOnEnd")}
                   />
                 </div>
               ) : null}

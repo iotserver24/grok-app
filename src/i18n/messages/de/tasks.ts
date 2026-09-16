@@ -153,7 +153,7 @@ export const deTasks = {
   "batchAgents.mode.sessions": "Sitzungen öffnen",
   "batchAgents.mode.headless": "Headless-Zusammenfassung",
   "batchAgents.mode.sessionsHint": "Legt einen App-Chat pro Projekt an, verbindet den Agenten und sendet den Prompt (in Multi-Sitzungs-Concurrency eingereiht). Soft-Fail bei nicht vertrauenswürdig / fehlenden Pfaden.",
-  "batchAgents.mode.headlessHint": "Führt One-Shot `grok -p` pro Projekt mit Soft-Timeout aus. Ergebnisse als Zusammenfassungstabelle — keine App-Sitzungen. Soft-Fail bei fehlender CLI / Timeout / leerem Output.",
+  "batchAgents.mode.headlessHint": "Führt One-Shot `supercharge -p` pro Projekt mit Soft-Timeout aus. Ergebnisse als Zusammenfassungstabelle — keine App-Sitzungen. Soft-Fail bei fehlender CLI / Timeout / leerem Output.",
   "batchAgents.promptLabel": "Gemeinsamer Prompt",
   "batchAgents.promptPlaceholder": "z. B. Offene TODOs prüfen und Risiko in diesem Repo zusammenfassen…",
   "batchAgents.searchPlaceholder": "Projekte filtern…",

@@ -12,7 +12,7 @@
  * Settings offers presets; storage accepts any non-negative integer.
  */
 
-export const ASK_USER_TIMEOUT_STORAGE_KEY = "grok.askUserTimeoutSec";
+export const ASK_USER_TIMEOUT_STORAGE_KEY = "supercharge.askUserTimeoutSec";
 
 /** Fired on `window` after a successful save (detail = seconds). */
 export const ASK_USER_TIMEOUT_CHANGE_EVENT = "grok-ask-user-timeout-change";

@@ -3,7 +3,9 @@ use std::io::Write;
 use zip::write::SimpleFileOptions;
 
 fn tmp() -> (std::sync::MutexGuard<'static, ()>, PathBuf) {
-    let g = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+    let g = crate::paths::APP_HOME_ENV_LOCK
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     let dir = std::env::temp_dir().join(format!(
         "grok-skin-pack-{}-{}",
         std::process::id(),
@@ -61,7 +63,7 @@ fn ocean_manifest(sha: &str, file: &str) -> String {
 #[test]
 fn reject_zip_slip() {
     let (_g, dir) = tmp();
-    let zip = dir.join("slip.grokskin");
+    let zip = dir.join("slip.superchargeskin");
     write_zip(&zip, &[("../evil.txt", b"{}", CompressionMethod::Stored)]);
     let e = inspect_pack(&zip, "file").unwrap_err();
     assert!(e.starts_with("invalid_pack"), "{e}");
@@ -72,7 +74,7 @@ fn reject_zip_slip() {
 #[test]
 fn reject_entry_count_bomb() {
     let (_g, dir) = tmp();
-    let zip = dir.join("bomb.grokskin");
+    let zip = dir.join("bomb.superchargeskin");
     let f = File::create(&zip).unwrap();
     let mut z = ZipWriter::new(f);
     let opts = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
@@ -96,7 +98,7 @@ fn reject_entry_count_bomb() {
 #[test]
 fn reject_uncompressed_cap() {
     let (_g, dir) = tmp();
-    let zip = dir.join("huge.grokskin");
+    let zip = dir.join("huge.superchargeskin");
     write_zip(
         &zip,
         &[(
@@ -131,7 +133,7 @@ fn reject_uncompressed_cap() {
 #[test]
 fn reject_unknown_top_level() {
     let (_g, dir) = tmp();
-    let zip = dir.join("extra.grokskin");
+    let zip = dir.join("extra.superchargeskin");
     write_zip(
         &zip,
         &[
@@ -152,7 +154,7 @@ fn reject_unknown_top_level() {
 #[test]
 fn reject_missing_manifest() {
     let (_g, dir) = tmp();
-    let zip = dir.join("nom.grokskin");
+    let zip = dir.join("nom.superchargeskin");
     write_zip(
         &zip,
         &[(
@@ -173,7 +175,7 @@ fn accepts_case_aliases() {
     let png = tiny_png();
     let sha = sha256_hex(&png);
     let man = ocean_manifest(&sha, "assets/wallpaper.png");
-    let zip = dir.join("case.grokskin");
+    let zip = dir.join("case.superchargeskin");
     write_zip(
         &zip,
         &[
@@ -191,7 +193,7 @@ fn accepts_case_aliases() {
 #[test]
 fn reject_duplicate_normalized_names() {
     let (_g, dir) = tmp();
-    let zip = dir.join("dup.grokskin");
+    let zip = dir.join("dup.superchargeskin");
     write_zip(
         &zip,
         &[
@@ -217,7 +219,7 @@ fn reject_duplicate_normalized_names() {
 #[test]
 fn reject_unknown_compression() {
     let (_g, dir) = tmp();
-    let zip = dir.join("meth.grokskin");
+    let zip = dir.join("meth.superchargeskin");
     write_zip(
         &zip,
         &[(
@@ -249,7 +251,7 @@ fn reject_unknown_compression() {
 fn reject_tokens_style_css() {
     let (_g, dir) = tmp();
     for key in ["tokens", "style", "css"] {
-        let zip = dir.join(format!("{key}.grokskin"));
+        let zip = dir.join(format!("{key}.superchargeskin"));
         let man = format!(r#"{{"schemaVersion":1,"name":"x","skin":"default","{key}":{{}}}}"#);
         write_zip(
             &zip,
@@ -265,7 +267,7 @@ fn reject_tokens_style_css() {
 #[test]
 fn reject_schema_not_one() {
     let (_g, dir) = tmp();
-    let zip = dir.join("v2.grokskin");
+    let zip = dir.join("v2.superchargeskin");
     write_zip(
         &zip,
         &[(
@@ -285,7 +287,7 @@ fn reject_hash_mismatch() {
     let (_g, dir) = tmp();
     let png = tiny_png();
     let man = ocean_manifest(&"ab".repeat(32), "assets/wallpaper.png");
-    let zip = dir.join("hash.grokskin");
+    let zip = dir.join("hash.superchargeskin");
     write_zip(
         &zip,
         &[
@@ -305,7 +307,7 @@ fn round_trip_export_inspect() {
     let png = tiny_png();
     let wall = dir.join("src.png");
     fs::write(&wall, &png).unwrap();
-    let dest = dir.join("out.grokskin");
+    let dest = dir.join("out.superchargeskin");
     let man = serde_json::json!({
         "schemaVersion": 1,
         "name": "Harbor dusk",
@@ -349,6 +351,7 @@ fn inspect_fixture_twice_stable() {
     let png = tiny_png();
     let sha = sha256_hex(&png);
     let man = ocean_manifest(&sha, "assets/wallpaper.png");
+    // Legacy extension remains readable for imported/shared packs.
     let zip = dir.join("stable.grokskin");
     write_zip(
         &zip,

@@ -1,4 +1,4 @@
-//! Headless Grok turns for Remote IM (spawn `grok -p` streaming; ACP fallback later).
+//! Headless Supercharge turns for Remote IM (`supercharge -p` streaming; ACP fallback later).
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -14,7 +14,7 @@ use super::context::{extract_context_signals, ContextCompactSnapshot, ContextUsa
 const PROCESS_TREE_GRACE: Duration = Duration::from_millis(200);
 type ConfigureCommand = fn(&mut Command);
 
-pub struct GrokTurnResult {
+pub struct SuperchargeTurnResult {
     pub text: String,
     pub session_id: Option<String>,
     pub error: Option<String>,
@@ -23,8 +23,8 @@ pub struct GrokTurnResult {
     pub cancelled: bool,
 }
 
-fn cancelled_result() -> GrokTurnResult {
-    GrokTurnResult {
+fn cancelled_result() -> SuperchargeTurnResult {
+    SuperchargeTurnResult {
         text: String::new(),
         session_id: None,
         error: None,
@@ -62,7 +62,7 @@ fn configure_process_tree(cmd: &mut Command) {
     #[cfg(unix)]
     {
         // SAFETY: pre_exec runs in the child before exec. setsid gives every
-        // Grok turn its own process group so `/stop` can terminate descendants.
+        // Supercharge turn its own process group so `/stop` can terminate descendants.
         unsafe {
             cmd.pre_exec(|| {
                 if libc_setsid() == -1 {
@@ -100,25 +100,25 @@ async fn terminate_and_reap(child: &mut Child, process_tree: &ProcessTree) {
 
     tracing::debug!(
         pid = ?process_tree.id,
-        "remote_im: terminating grok leader"
+        "remote_im: terminating Supercharge leader"
     );
     if let Err(error) = child.start_kill() {
         tracing::debug!(%error, "remote_im: child already exited before cancellation");
     }
     if let Err(error) = child.wait().await {
-        tracing::warn!(%error, "remote_im: failed to reap cancelled grok child");
+        tracing::warn!(%error, "remote_im: failed to reap cancelled Supercharge child");
     }
 }
 
 /// Wait for a stdio reader. `/stop` can still unstick a hung pipe; a successful
 /// turn waits for EOF the same way as before this change.
-#[allow(clippy::result_large_err)] // GrokTurnResult carries turn context; cold path
+#[allow(clippy::result_large_err)] // SuperchargeTurnResult carries turn context; cold path
 async fn await_stdio_or_cancel<T: Default>(
     task: &mut tokio::task::JoinHandle<T>,
     cancel: &mut Option<oneshot::Receiver<()>>,
     child: &mut Child,
     process_tree: &ProcessTree,
-) -> Result<T, GrokTurnResult> {
+) -> Result<T, SuperchargeTurnResult> {
     tokio::select! {
         biased;
         _ = wait_for_cancellation(cancel) => {
@@ -131,58 +131,31 @@ async fn await_stdio_or_cancel<T: Default>(
     }
 }
 
-pub fn resolve_grok_binary() -> PathBuf {
-    if let Ok(p) = which::which("grok") {
-        return p;
-    }
-    let home = crate::process_util::user_home();
-    let candidates = [
-        home.join(".grok/bin/grok"),
-        PathBuf::from("/usr/local/bin/grok"),
-        PathBuf::from("/opt/homebrew/bin/grok"),
-    ];
-    for c in candidates {
-        if c.is_file() {
-            return c;
-        }
-    }
-    PathBuf::from("grok")
+pub fn resolve_supercharge_binary() -> Option<PathBuf> {
+    let settings = crate::store::load_settings();
+    crate::cli_probe::probe_cli(settings.manual_cli_path.as_deref())
+        .path
+        .map(PathBuf::from)
 }
 
-/// Same GROK_HOME the App uses for ACP (independent → agent-home, shared → ~/.grok).
-/// Without this, `/r` resumes with an agent session id that only exists under agent-home
-/// and the CLI reports "Session not found locally" + remote 404.
-pub fn resolve_remote_grok_home() -> PathBuf {
+/// Same `SUPERCHARGE_HOME` the App uses for ACP so Remote IM can resume the
+/// same agent sessions as the desktop workbench.
+pub fn resolve_remote_supercharge_home() -> PathBuf {
     let mode = crate::store::load_settings().session_data_mode;
-    crate::paths::resolve_agent_grok_home(&mode)
+    crate::paths::resolve_agent_supercharge_home(&mode)
 }
 
 fn apply_agent_env(cmd: &mut Command) {
-    let grok_home = resolve_remote_grok_home();
-    let _ = std::fs::create_dir_all(&grok_home);
-    cmd.env("GROK_HOME", &grok_home);
+    let supercharge_home = resolve_remote_supercharge_home();
+    let _ = std::fs::create_dir_all(&supercharge_home);
+    cmd.env("SUPERCHARGE_HOME", &supercharge_home);
     // Independent mode may need App-synced auth/providers (same as ACP spawn path).
     let mode = crate::store::load_settings().session_data_mode;
     if mode != "shared" {
         crate::providers::prepare_route_auth_for_agent();
     }
-    // GUI-spawned processes often lack ~/.grok/bin on PATH.
-    if let Ok(path) = std::env::var("PATH") {
-        let home = crate::process_util::user_home();
-        let extra = [
-            home.join(".grok/bin"),
-            PathBuf::from("/opt/homebrew/bin"),
-            PathBuf::from("/usr/local/bin"),
-        ];
-        let mut parts: Vec<String> = path.split(':').map(|s| s.to_string()).collect();
-        for e in extra {
-            let s = e.to_string_lossy().to_string();
-            if e.is_dir() && !parts.iter().any(|p| p == &s) {
-                parts.insert(0, s);
-            }
-        }
-        cmd.env("PATH", parts.join(":"));
-    }
+    // GUI-spawned processes often lack HOME and user CLI directories on PATH.
+    crate::process_util::apply_cli_env_tokio(cmd);
     // Same proxy injection as ACP spawn (NEW-02) — without this, Remote IM
     // turns go direct and only work when the OS has TUN.
     crate::proxy::apply_to_tokio_command(cmd);
@@ -194,7 +167,7 @@ fn apply_agent_env(cmd: &mut Command) {
     );
 }
 
-/// One-shot headless turn with JSON-line stream parse (compatible with Grok Build CLI).
+/// One-shot headless turn with JSON-line stream parse (compatible with Supercharge CLI).
 pub async fn run_turn(
     work_dir: &Path,
     prompt: &str,
@@ -202,8 +175,17 @@ pub async fn run_turn(
     always_approve: bool,
     cancel: Option<oneshot::Receiver<()>>,
     on_delta: Option<tokio::sync::mpsc::Sender<String>>,
-) -> GrokTurnResult {
-    let binary = resolve_grok_binary();
+) -> SuperchargeTurnResult {
+    let Some(binary) = resolve_supercharge_binary() else {
+        return SuperchargeTurnResult {
+            text: String::new(),
+            session_id: None,
+            error: Some("Supercharge CLI not found".into()),
+            usage: None,
+            compact: None,
+            cancelled: false,
+        };
+    };
     run_turn_with_binary(
         &binary,
         work_dir,
@@ -224,7 +206,7 @@ async fn run_turn_with_binary(
     always_approve: bool,
     cancel: Option<oneshot::Receiver<()>>,
     on_delta: Option<tokio::sync::mpsc::Sender<String>>,
-) -> GrokTurnResult {
+) -> SuperchargeTurnResult {
     run_turn_with_binary_and_env(
         binary,
         work_dir,
@@ -248,7 +230,7 @@ async fn run_turn_with_binary_and_env(
     mut cancel: Option<oneshot::Receiver<()>>,
     on_delta: Option<tokio::sync::mpsc::Sender<String>>,
     configure_command: ConfigureCommand,
-) -> GrokTurnResult {
+) -> SuperchargeTurnResult {
     if cancellation_requested(&mut cancel) {
         return cancelled_result();
     }
@@ -285,17 +267,17 @@ async fn run_turn_with_binary_and_env(
         binary = %binary.display(),
         cwd = %work_dir.display(),
         resume = ?session_id,
-        grok_home = %resolve_remote_grok_home().display(),
-        "remote_im: grok turn start"
+        supercharge_home = %resolve_remote_supercharge_home().display(),
+        "remote_im: Supercharge turn start"
     );
 
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
-            return GrokTurnResult {
+            return SuperchargeTurnResult {
                 text: String::new(),
                 session_id: None,
-                error: Some(format!("spawn grok failed: {e}")),
+                error: Some(format!("spawn Supercharge failed: {e}")),
                 usage: None,
                 compact: None,
                 cancelled: false,
@@ -384,7 +366,7 @@ async fn run_turn_with_binary_and_env(
                         v.get("message")
                             .or_else(|| v.get("error"))
                             .and_then(|x| x.as_str())
-                            .unwrap_or("grok error")
+                            .unwrap_or("Supercharge error")
                             .to_string(),
                     );
                 }
@@ -432,7 +414,7 @@ async fn run_turn_with_binary_and_env(
         if !st.success() && acc.trim().is_empty() {
             let se = stderr_text.trim();
             err_msg = Some(if se.is_empty() {
-                format!("grok exit {:?}", st.code())
+                format!("Supercharge exit {:?}", st.code())
             } else {
                 se.chars().take(800).collect()
             });
@@ -456,7 +438,7 @@ async fn run_turn_with_binary_and_env(
         tracing::warn!(
             resume = ?session_id,
             cwd = %work_dir.display(),
-            grok_home = %resolve_remote_grok_home().display(),
+            supercharge_home = %resolve_remote_supercharge_home().display(),
             "remote_im: --resume failed; retrying without resume (new turn in same workdir)"
         );
         let mut fresh = run_turn_simple(
@@ -523,7 +505,7 @@ async fn run_turn_with_binary_and_env(
         return simple;
     }
 
-    GrokTurnResult {
+    SuperchargeTurnResult {
         text: acc.trim().to_string(),
         session_id: out_sid.or_else(|| {
             session_id
@@ -545,7 +527,7 @@ async fn run_turn_simple(
     always_approve: bool,
     cancel: &mut Option<oneshot::Receiver<()>>,
     configure_command: ConfigureCommand,
-) -> GrokTurnResult {
+) -> SuperchargeTurnResult {
     if cancellation_requested(cancel) {
         return cancelled_result();
     }
@@ -569,7 +551,7 @@ async fn run_turn_simple(
     let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(e) => {
-            return GrokTurnResult {
+            return SuperchargeTurnResult {
                 text: String::new(),
                 session_id: session_id
                     .map(|s| s.trim().to_string())
@@ -628,14 +610,14 @@ async fn run_turn_simple(
             let stderr = String::from_utf8_lossy(&stderr).trim().to_string();
             let err = if !status.success() && text.is_empty() {
                 Some(if stderr.is_empty() {
-                    format!("grok exit {:?}", status.code())
+                    format!("Supercharge exit {:?}", status.code())
                 } else {
                     stderr
                 })
             } else {
                 None
             };
-            GrokTurnResult {
+            SuperchargeTurnResult {
                 text,
                 // Preserve resume id when CLI does not echo a new session id.
                 session_id: session_id
@@ -647,7 +629,7 @@ async fn run_turn_simple(
                 cancelled: false,
             }
         }
-        Err(e) => GrokTurnResult {
+        Err(e) => SuperchargeTurnResult {
             text: String::new(),
             session_id: session_id
                 .map(|s| s.trim().to_string())
@@ -730,16 +712,17 @@ mod tests {
     }
 
     #[test]
-    fn remote_grok_home_matches_app_session_data_mode() {
+    fn remote_supercharge_home_matches_app_session_data_mode() {
         let mode = crate::store::load_settings().session_data_mode;
-        let home = resolve_remote_grok_home();
-        let expected = crate::paths::resolve_agent_grok_home(&mode);
+        let home = resolve_remote_supercharge_home();
+        let expected = crate::paths::resolve_agent_supercharge_home(&mode);
         assert_eq!(home, expected);
-        // Independent default: must NOT be bare ~/.grok when App stores sessions in agent-home.
+        // Independent mode uses the App-owned Supercharge profile.
         if mode != "shared" {
             assert!(
-                home.ends_with("agent-home") || home.to_string_lossy().contains("agent-home"),
-                "independent GROK_HOME should be agent-home, got {}",
+                home.ends_with("supercharge-home")
+                    || home.to_string_lossy().contains("supercharge-home"),
+                "independent SUPERCHARGE_HOME should be supercharge-home, got {}",
                 home.display()
             );
         }
@@ -747,34 +730,35 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn cancellation_kills_and_reaps_the_grok_child() {
+    async fn cancellation_kills_and_reaps_the_supercharge_child() {
         use std::os::unix::fs::PermissionsExt;
 
         let test_dir = std::env::temp_dir().join(format!(
-            "grok-app-remote-im-cancel-{}",
+            "supercharge-app-remote-im-cancel-{}",
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir(&test_dir).expect("create cancellation test directory");
-        let fake_grok = test_dir.join("grok");
-        let parent_pid_file = test_dir.join("grok.pid");
+        let fake_supercharge = test_dir.join("supercharge");
+        let parent_pid_file = test_dir.join("supercharge.pid");
         let descendant_pid_file = test_dir.join("descendant.pid");
         std::fs::write(
-            &fake_grok,
-            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo 'grok 1.0.0'\n  exit 0\nfi\nprintf '%s' \"$$\" > \"$(dirname \"$0\")/grok.pid\"\nsleep 600 &\ndescendant=$!\nprintf '%s' \"$descendant\" > \"$(dirname \"$0\")/descendant.pid\"\nwait \"$descendant\"\n",
+            &fake_supercharge,
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo 'supercharge 1.0.0'\n  exit 0\nfi\nprintf '%s' \"$$\" > \"$(dirname \"$0\")/supercharge.pid\"\nsleep 600 &\ndescendant=$!\nprintf '%s' \"$descendant\" > \"$(dirname \"$0\")/descendant.pid\"\nwait \"$descendant\"\n",
         )
-        .expect("write fake grok executable");
-        let mut permissions = std::fs::metadata(&fake_grok)
-            .expect("stat fake grok executable")
+        .expect("write fake Supercharge executable");
+        let mut permissions = std::fs::metadata(&fake_supercharge)
+            .expect("stat fake Supercharge executable")
             .permissions();
         permissions.set_mode(0o755);
-        std::fs::set_permissions(&fake_grok, permissions).expect("make fake grok executable");
+        std::fs::set_permissions(&fake_supercharge, permissions)
+            .expect("make fake Supercharge executable");
 
         let (cancel_tx, cancel_rx) = oneshot::channel();
-        let fake_grok_for_turn = fake_grok.clone();
+        let fake_supercharge_for_turn = fake_supercharge.clone();
         let work_dir = test_dir.clone();
         let turn = tokio::spawn(async move {
             run_turn_with_binary_and_env(
-                &fake_grok_for_turn,
+                &fake_supercharge_for_turn,
                 &work_dir,
                 "hang",
                 None,
@@ -804,7 +788,7 @@ mod tests {
                 }
             })
             .await
-            .expect("fake grok process tree did not start");
+            .expect("fake Supercharge process tree did not start");
 
         cancel_tx
             .send(())
@@ -818,13 +802,13 @@ mod tests {
         for pid in [parent_pid, descendant_pid] {
             assert!(
                 !process_exists(pid),
-                "cancelled grok process {pid} survived"
+                "cancelled Supercharge process {pid} survived"
             );
         }
 
         let _ = std::fs::remove_file(parent_pid_file);
         let _ = std::fs::remove_file(descendant_pid_file);
-        let _ = std::fs::remove_file(fake_grok);
+        let _ = std::fs::remove_file(fake_supercharge);
         let _ = std::fs::remove_dir(test_dir);
     }
 
@@ -834,30 +818,31 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let test_dir = std::env::temp_dir().join(format!(
-            "grok-app-remote-im-pipe-cancel-{}",
+            "supercharge-app-remote-im-pipe-cancel-{}",
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir(&test_dir).expect("create pipe cancellation test directory");
-        let fake_grok = test_dir.join("grok");
-        let parent_pid_file = test_dir.join("grok.pid");
+        let fake_supercharge = test_dir.join("supercharge");
+        let parent_pid_file = test_dir.join("supercharge.pid");
         let descendant_pid_file = test_dir.join("descendant.pid");
         std::fs::write(
-            &fake_grok,
-            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo 'grok 1.0.0'\n  exit 0\nfi\nprintf '%s' \"$$\" > \"$(dirname \"$0\")/grok.pid\"\nsleep 600 >&2 &\ndescendant=$!\nprintf '%s' \"$descendant\" > \"$(dirname \"$0\")/descendant.pid\"\nexit 0\n",
+            &fake_supercharge,
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo 'supercharge 1.0.0'\n  exit 0\nfi\nprintf '%s' \"$$\" > \"$(dirname \"$0\")/supercharge.pid\"\nsleep 600 >&2 &\ndescendant=$!\nprintf '%s' \"$descendant\" > \"$(dirname \"$0\")/descendant.pid\"\nexit 0\n",
         )
-        .expect("write fake grok executable");
-        let mut permissions = std::fs::metadata(&fake_grok)
-            .expect("stat fake grok executable")
+        .expect("write fake Supercharge executable");
+        let mut permissions = std::fs::metadata(&fake_supercharge)
+            .expect("stat fake Supercharge executable")
             .permissions();
         permissions.set_mode(0o755);
-        std::fs::set_permissions(&fake_grok, permissions).expect("make fake grok executable");
+        std::fs::set_permissions(&fake_supercharge, permissions)
+            .expect("make fake Supercharge executable");
 
         let (cancel_tx, cancel_rx) = oneshot::channel();
-        let fake_grok_for_turn = fake_grok.clone();
+        let fake_supercharge_for_turn = fake_supercharge.clone();
         let work_dir = test_dir.clone();
         let turn = tokio::spawn(async move {
             run_turn_with_binary_and_env(
-                &fake_grok_for_turn,
+                &fake_supercharge_for_turn,
                 &work_dir,
                 "hang through inherited stderr",
                 None,
@@ -901,7 +886,7 @@ mod tests {
         assert!(result.cancelled, "turn did not report cancellation");
         assert!(
             !process_exists(parent_pid),
-            "grok leader unexpectedly returned"
+            "Supercharge leader unexpectedly returned"
         );
         assert!(
             !process_exists(descendant_pid),
@@ -910,7 +895,7 @@ mod tests {
 
         let _ = std::fs::remove_file(parent_pid_file);
         let _ = std::fs::remove_file(descendant_pid_file);
-        let _ = std::fs::remove_file(fake_grok);
+        let _ = std::fs::remove_file(fake_supercharge);
         let _ = std::fs::remove_dir(test_dir);
     }
 }

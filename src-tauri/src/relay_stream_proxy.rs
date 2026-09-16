@@ -3,7 +3,7 @@
 //! Some gateways (OpenCode Zen Go, etc.) append proprietary trailers such as:
 //!   `{"choices":[],"x-opencode-type":"inference-cost",...}`  // missing `id`
 //!   `{"type":"ping","cost":"0"}`
-//! Grok Build CLI deserializes stream chunks strictly and **fatals** on these,
+//! Supercharge CLI deserializes stream chunks strictly and **fatals** on these,
 //! which surfaces in the App as “Agent crashed / protocol interrupted”.
 //!
 //! Host rewrites affected providers’ `base_url` to
@@ -38,7 +38,7 @@ fn start_lock() -> &'static Mutex<()> {
     START_LOCK.get_or_init(|| Mutex::new(()))
 }
 
-/// Hosts that need SSE sanitizing before Grok Build sees them.
+/// Hosts that need SSE sanitizing before Supercharge sees them.
 pub fn host_needs_stream_sanitize(base_url: &str) -> bool {
     let u = base_url.trim().to_ascii_lowercase();
     u.contains("opencode.ai") || u.contains("/zen/go")
@@ -584,7 +584,7 @@ mod tests {
 
     #[test]
     fn drops_live_opencode_cost_trailer() {
-        // Exact shape from Grok Build stderr (missing `id` → ChatCompletionChunk fail).
+        // Exact shape from Supercharge stderr (missing `id` → ChatCompletionChunk fail).
         let raw = r#"{"choices":[],"x-opencode-type":"inference-cost","cost":"0.00033520","normalizedUsage":{"inputTokens":59,"outputTokens":17,"reasoningTokens":48,"cacheReadTokens":384,"cacheWrite5mTokens":0,"cacheWrite1hTokens":0}}"#;
         assert!(should_drop_sse_data_payload(raw));
     }

@@ -93,7 +93,6 @@ export function WorkbenchComposerShell(p: WorkbenchComposerShellProps) {
     layout,
     liveAt,
     liveSlash,
-    liveVoiceOpen,
     locale,
     mode,
     onComposerContextMenu,
@@ -795,7 +794,6 @@ export function WorkbenchComposerShell(p: WorkbenchComposerShellProps) {
                     phase: voice.phase,
                     gateAvailable: voiceGate.available,
                     autoSend: voiceDictationAutoSend,
-                    liveVoiceOpen,
                     canType: canType(session.state),
                   });
                   const micLabel = tr(

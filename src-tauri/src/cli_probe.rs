@@ -1,10 +1,8 @@
-//! Probe Grok Build CLI on PATH and common locations (B01–B03).
+//! Probe the Supercharge CLI on PATH and common locations (B01–B03).
 //!
-//! Cross-platform notes:
-//! - macOS/Windows GUI apps often inherit a sparse PATH (Dock / Explorer), so we
-//!   always scan official install dirs + an enriched PATH, not only `which`.
-//! - Windows: `.exe` / `.cmd` / `.bat`, PATHEXT, `USERPROFILE`, WinGet/Scoop.
-//! - macOS: `~/.grok/bin`, Homebrew Intel/ARM, `~/.local/bin`.
+//! Discovery order starts with `SUPERCHARGE_BIN`, then the app's manual path,
+//! then `supercharge` / `supercharge-pager` in the native install locations and
+//! PATH. The old Grok executable is never selected as a runtime fallback.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -50,7 +48,7 @@ pub fn clear_last_acp_agent_version_for_test() {
 /// placement in `acp_client::spawn_with_home`.
 pub const MIN_CLI_VERSION: (u64, u64, u64) = (0, 2, 112);
 
-/// Product **recommended** CLI line (Grok Build 1.0). Below this still boots when
+/// Product **recommended** CLI line (Supercharge 1.0). Below this still boots when
 /// ≥ [`MIN_CLI_VERSION`]; UI shows a soft upgrade chip, never a hard block.
 pub const RECOMMENDED_CLI_VERSION: (u64, u64, u64) = (1, 0, 0);
 
@@ -244,7 +242,7 @@ pub struct CliProbeResult {
     pub version_supported: Option<bool>,
     /// Minimum version this app requires, so the UI need not hardcode it.
     pub min_version: String,
-    /// Product recommended CLI line (Grok Build 1.0+). Soft guidance only.
+    /// Product recommended CLI line (Supercharge 1.0+). Soft guidance only.
     #[serde(default)]
     pub recommended_version: String,
     /// `Some(true)` when version ≥ recommended; `Some(false)` when older;
@@ -263,14 +261,31 @@ pub struct CliProbeResult {
     /// Last live ACP `initialize` / TCP-probe `agentVersion` (process cache).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acp_agent_version: Option<String>,
-    /// True when probe `grok --version` and live ACP agentVersion cores differ.
+    /// True when probe `supercharge --version` and live ACP agentVersion cores differ.
     /// Soft-only: never blocks session open.
     #[serde(default)]
     pub acp_agent_version_skew: bool,
 }
 
 pub fn cli_auth_json_present() -> bool {
-    user_home().join(".grok").join("auth.json").is_file()
+    let home = crate::paths::shared_supercharge_home();
+    if home.join("auth.json").is_file() {
+        return true;
+    }
+    let Ok(config) = fs::read_to_string(home.join("config.toml")) else {
+        return false;
+    };
+    config.lines().any(|line| {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            return false;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            return false;
+        };
+        matches!(key.trim(), "api_key" | "env_key" | "auth_provider")
+            && !value.trim().trim_matches(['\"', '\'']).is_empty()
+    })
 }
 
 /// Expand `~` / `%USERPROFILE%` / `%HOME%` so manual paths work on both OSes.
@@ -319,14 +334,25 @@ pub fn expand_user_path(raw: &str) -> PathBuf {
 }
 
 /// Binary basenames to look for (Windows includes extension variants).
+/// `supercharge` is preferred, with `supercharge-pager` as the supported
+/// composition-root fallback.
 fn binary_names() -> &'static [&'static str] {
     #[cfg(target_os = "windows")]
     {
-        &["grok.exe", "grok.cmd", "grok.bat", "grok"]
+        &[
+            "supercharge.exe",
+            "supercharge.cmd",
+            "supercharge.bat",
+            "supercharge",
+            "supercharge-pager.exe",
+            "supercharge-pager.cmd",
+            "supercharge-pager.bat",
+            "supercharge-pager",
+        ]
     }
     #[cfg(not(target_os = "windows"))]
     {
-        &["grok"]
+        &["supercharge", "supercharge-pager"]
     }
 }
 
@@ -364,8 +390,8 @@ fn push_bin_in_dir(
 }
 
 /// Resolve `which` using the process PATH and, if needed, an enriched PATH
-/// (GUI apps often miss `~/.grok/bin` / Homebrew / WinGet).
-fn which_grok_variants() -> Vec<PathBuf> {
+/// (GUI apps often miss `~/.supercharge/bin` / Homebrew / WinGet).
+fn which_supercharge_variants() -> Vec<PathBuf> {
     let mut found = Vec::new();
     let names = binary_names();
 
@@ -398,33 +424,65 @@ fn which_grok_variants() -> Vec<PathBuf> {
     found
 }
 
-fn candidate_paths(manual: Option<&str>) -> Vec<PathBuf> {
+fn is_legacy_grok_binary_path(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| {
+            let name = name.to_ascii_lowercase();
+            matches!(name.as_str(), "grok" | "grok.exe" | "grok.cmd" | "grok.bat")
+                || name.starts_with("grok-")
+        })
+        .unwrap_or(false)
+}
+
+fn candidate_paths_with_env(
+    manual: Option<&str>,
+    supercharge_bin: Option<&std::ffi::OsStr>,
+) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
-    // 1) Manual path (settings / file picker) — highest priority
+    // 1) Explicit runtime override — highest priority across every launch path.
+    if let Some(from_env) = supercharge_bin.filter(|v| !v.is_empty()) {
+        let path = expand_user_path(&from_env.to_string_lossy());
+        if !is_legacy_grok_binary_path(&path) {
+            push_unique(&mut out, &mut seen, path);
+        }
+    }
+
+    // 2) Manual path (settings / file picker). Ignore an old saved `grok`
+    // executable so upgrading the desktop cannot silently launch the legacy runtime.
     if let Some(m) = manual {
         if !m.trim().is_empty() {
             let expanded = expand_user_path(m);
-            push_unique(&mut out, &mut seen, expanded.clone());
-            // Windows: user may omit .exe
-            #[cfg(target_os = "windows")]
-            {
-                if expanded.extension().is_none() {
-                    push_unique(&mut out, &mut seen, expanded.with_extension("exe"));
+            if !is_legacy_grok_binary_path(&expanded) {
+                push_unique(&mut out, &mut seen, expanded.clone());
+                // Windows: user may omit .exe
+                #[cfg(target_os = "windows")]
+                {
+                    if expanded.extension().is_none() {
+                        push_unique(&mut out, &mut seen, expanded.with_extension("exe"));
+                    }
                 }
             }
         }
     }
 
-    // 2) Official default install layout (xAI install.sh / install.ps1)
-    //    Prefer these over ambient PATH so GUI apps match CLI installs.
+    // 3) A colocated runtime bundled beside the desktop executable.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            push_bin_in_dir(&mut out, &mut seen, dir.to_path_buf());
+        }
+    }
+
+    // 4) Supercharge install layouts. Prefer these over ambient PATH so GUI
+    // apps match command-line installs.
     let home = user_home();
     #[cfg(target_os = "windows")]
     {
-        push_bin_in_dir(&mut out, &mut seen, home.join(r".grok\bin"));
+        push_bin_in_dir(&mut out, &mut seen, home.join(r".supercharge\bin"));
         // Versioned downloads left by installer (before link/copy)
-        if let Ok(rd) = std::fs::read_dir(home.join(r".grok\downloads")) {
+        if let Ok(rd) = std::fs::read_dir(home.join(r".supercharge\downloads")) {
             for ent in rd.flatten() {
                 let p = ent.path();
                 let name = p
@@ -432,7 +490,7 @@ fn candidate_paths(manual: Option<&str>) -> Vec<PathBuf> {
                     .and_then(|n| n.to_str())
                     .unwrap_or("")
                     .to_ascii_lowercase();
-                if name.starts_with("grok-")
+                if (name.starts_with("supercharge-") || name.starts_with("supercharge-pager-"))
                     && (name.ends_with(".exe") || !name.contains('.'))
                     && !name.ends_with(".part")
                     && !name.ends_with(".tmp")
@@ -449,11 +507,11 @@ fn candidate_paths(manual: Option<&str>) -> Vec<PathBuf> {
         if let Ok(local) = std::env::var("LOCALAPPDATA") {
             let local = PathBuf::from(local);
             push_bin_in_dir(&mut out, &mut seen, local.join(r"Microsoft\WinGet\Links"));
-            push_bin_in_dir(&mut out, &mut seen, local.join(r"Programs\grok"));
-            push_bin_in_dir(&mut out, &mut seen, local.join(r"grok\bin"));
+            push_bin_in_dir(&mut out, &mut seen, local.join(r"Programs\Supercharge"));
+            push_bin_in_dir(&mut out, &mut seen, local.join(r"supercharge\bin"));
         }
         if let Ok(pf) = std::env::var("ProgramFiles") {
-            push_bin_in_dir(&mut out, &mut seen, PathBuf::from(pf).join("grok"));
+            push_bin_in_dir(&mut out, &mut seen, PathBuf::from(pf).join("Supercharge"));
         }
         // Chocolatey
         push_bin_in_dir(
@@ -464,13 +522,16 @@ fn candidate_paths(manual: Option<&str>) -> Vec<PathBuf> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        push_bin_in_dir(&mut out, &mut seen, home.join(".grok/bin"));
+        push_bin_in_dir(&mut out, &mut seen, home.join(".supercharge/bin"));
         // Versioned downloads (symlink targets)
-        if let Ok(rd) = std::fs::read_dir(home.join(".grok/downloads")) {
+        if let Ok(rd) = std::fs::read_dir(home.join(".supercharge/downloads")) {
             for ent in rd.flatten() {
                 let p = ent.path();
                 let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if name.starts_with("grok-") && !name.ends_with(".part") && !name.contains(".tmp") {
+                if (name.starts_with("supercharge-") || name.starts_with("supercharge-pager-"))
+                    && !name.ends_with(".part")
+                    && !name.contains(".tmp")
+                {
                     push_unique(&mut out, &mut seen, p);
                 }
             }
@@ -483,12 +544,16 @@ fn candidate_paths(manual: Option<&str>) -> Vec<PathBuf> {
         push_bin_in_dir(&mut out, &mut seen, PathBuf::from("/usr/bin"));
     }
 
-    // 3) PATH / which (process + enriched)
-    for p in which_grok_variants() {
+    // 5) PATH / which (process + enriched)
+    for p in which_supercharge_variants() {
         push_unique(&mut out, &mut seen, p);
     }
 
     out
+}
+
+fn candidate_paths(manual: Option<&str>) -> Vec<PathBuf> {
+    candidate_paths_with_env(manual, std::env::var_os("SUPERCHARGE_BIN").as_deref())
 }
 
 fn is_executable(path: &Path) -> bool {
@@ -523,7 +588,7 @@ pub fn read_version_of(path: &Path) -> Option<String> {
     Some(ver)
 }
 
-/// Wall-clock budget for a single `grok --version` (hung binaries must not
+/// Wall-clock budget for a single `supercharge --version` (hung binaries must not
 /// freeze the setup gate / async runtime forever).
 const VERSION_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 
@@ -589,13 +654,16 @@ fn read_version(path: &Path) -> Option<String> {
     }
 }
 
-fn classify_source(path: &Path, manual_first: bool) -> String {
+fn classify_source(path: &Path, explicit_env: bool, manual_first: bool) -> String {
+    if explicit_env {
+        return "env".into();
+    }
     if manual_first {
         return "manual".into();
     }
     let s = path.to_string_lossy();
     let lower = s.to_ascii_lowercase();
-    if lower.contains(".grok") {
+    if lower.contains(".supercharge") {
         "common_path".into()
     } else {
         "path".into()
@@ -606,6 +674,7 @@ pub fn probe_cli(manual_path: Option<&str>) -> CliProbeResult {
     let candidates = candidate_paths(manual_path);
     let tried: Vec<String> = candidates.iter().map(|p| p.display().to_string()).collect();
     let cli_auth_present = cli_auth_json_present();
+    let env_set = std::env::var_os("SUPERCHARGE_BIN").is_some_and(|v| !v.is_empty());
     let manual_set = manual_path.map(|m| !m.trim().is_empty()).unwrap_or(false);
 
     // Prefer a candidate that both looks runnable AND answers --version.
@@ -615,7 +684,7 @@ pub fn probe_cli(manual_path: Option<&str>) -> CliProbeResult {
         if !is_executable(path) {
             continue;
         }
-        let source = classify_source(path, manual_set && i == 0);
+        let source = classify_source(path, env_set && i == 0, !env_set && manual_set && i == 0);
         if let Some(version) = read_version(path) {
             let version_supported = cli_version_supported(&version);
             let path_s = path.display().to_string();
@@ -669,12 +738,10 @@ fn finish_probe_result(
     version_supported: Option<bool>,
 ) -> CliProbeResult {
     let meets_recommended = version.as_deref().and_then(cli_meets_recommended);
-    let (agent_path, agent_version) = if found {
-        probe_agent_sidecar(path.as_deref())
-    } else {
-        (None, None)
-    };
-    let agent_binary_skew = version_tokens_skew(version.as_deref(), agent_version.as_deref());
+    // Supercharge is a single binary; there is no separate agent sidecar to repair.
+    let agent_path = None;
+    let agent_version = None;
+    let agent_binary_skew = false;
     let acp_agent_version = last_acp_agent_version();
     let acp_agent_version_skew =
         version_tokens_skew(version.as_deref(), acp_agent_version.as_deref());
@@ -796,17 +863,16 @@ mod tests {
     }
 
     #[test]
-    fn probe_returns_structure() {
+    fn probe_returns_structure_without_agent_sidecar() {
         let r = probe_cli(None);
         assert!(!r.candidates_tried.is_empty() || r.found);
         if r.found {
             assert!(r.path.is_some());
-            assert!(r
-                .version
-                .as_ref()
-                .map(|v| v.contains("grok") || !v.is_empty())
-                .unwrap_or(true));
+            assert!(r.version.as_ref().map(|v| !v.is_empty()).unwrap_or(true));
         }
+        assert_eq!(r.agent_path, None);
+        assert_eq!(r.agent_version, None);
+        assert!(!r.agent_binary_skew);
     }
 
     #[test]
@@ -853,28 +919,45 @@ mod tests {
 
     #[test]
     fn candidates_include_platform_defaults() {
-        let c = candidate_paths(None);
+        let c = candidate_paths_with_env(None, None);
         let joined = c
             .iter()
             .map(|p| p.to_string_lossy().to_ascii_lowercase())
             .collect::<Vec<_>>()
             .join("\n");
-        // Both platforms should consider the official bin dir.
+        // Both platforms should consider the Supercharge install bin directory.
         assert!(
-            joined.contains(".grok") && (joined.contains("bin") || joined.contains("grok")),
-            "candidates missing official layout: {c:?}"
+            joined.contains(".supercharge")
+                && joined.contains("bin")
+                && joined.contains("supercharge"),
+            "candidates missing Supercharge layout: {c:?}"
+        );
+        assert!(
+            !c.iter().any(|path| is_legacy_grok_binary_path(path)),
+            "one-binary probe must not include a Grok runtime: {c:?}"
         );
     }
 
     #[test]
-    fn manual_path_is_first_candidate() {
+    fn manual_supercharge_path_is_first_candidate() {
+        let fake = if cfg!(target_os = "windows") {
+            r"C:\custom\supercharge.exe"
+        } else {
+            "/custom/supercharge"
+        };
+        let c = candidate_paths_with_env(Some(fake), None);
+        assert!(!c.is_empty());
+        assert_eq!(c[0], PathBuf::from(fake));
+    }
+
+    #[test]
+    fn legacy_grok_manual_path_is_not_a_candidate() {
         let fake = if cfg!(target_os = "windows") {
             r"C:\custom\grok.exe"
         } else {
             "/custom/grok"
         };
-        let c = candidate_paths(Some(fake));
-        assert!(!c.is_empty());
-        assert_eq!(c[0], PathBuf::from(fake));
+        let c = candidate_paths_with_env(Some(fake), None);
+        assert!(!c.iter().any(|path| path == &PathBuf::from(fake)), "{c:?}");
     }
 }

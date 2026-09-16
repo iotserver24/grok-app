@@ -14,7 +14,7 @@ pub enum BuiltinCommand {
     /// Show current/last-reported context usage for the bound session.
     Context,
     Stop,
-    /// List saved Grok accounts + quota; optional query picks/switches by number or label.
+    /// Legacy callback target. New command menus and slash parsing do not expose it.
     Account {
         query: Option<String>,
     },
@@ -101,26 +101,6 @@ pub fn native_bot_commands() -> &'static [NativeBotCommand] {
             description_en: "Cancel in-flight turn",
             description_zh: "中断当前任务",
         },
-        NativeBotCommand {
-            command: "account",
-            description_en: "List accounts & quota; /account n to switch",
-            description_zh: "查看账号与额度；/account n 切换",
-        },
-        NativeBotCommand {
-            command: "accounts",
-            description_en: "Same as /account",
-            description_zh: "同 /account",
-        },
-        NativeBotCommand {
-            command: "switch",
-            description_en: "Switch Grok account by number",
-            description_zh: "按序号切换 Grok 账号",
-        },
-        NativeBotCommand {
-            command: "quota",
-            description_en: "Show SuperGrok remaining quota",
-            description_zh: "查看 SuperGrok 剩余额度",
-        },
     ]
 }
 
@@ -163,8 +143,6 @@ pub fn parse_slash(text: &str) -> Option<BuiltinCommand> {
         "context" | "ctx" => BuiltinCommand::Context,
         "compact" => BuiltinCommand::Compact { note: query },
         "stop" | "cancel" => BuiltinCommand::Stop,
-        // Multi-account: list quota + switch (Telegram native menu + aliases).
-        "account" | "accounts" | "quota" | "usage" | "switch" => BuiltinCommand::Account { query },
         "p" | "project" => BuiltinCommand::Project { query },
         "r" | "resume" => BuiltinCommand::Resume { query },
         other => BuiltinCommand::Unknown {
@@ -176,7 +154,7 @@ pub fn parse_slash(text: &str) -> Option<BuiltinCommand> {
 pub fn help_text(lang: &str) -> String {
     if lang == "en" {
         [
-            "**Grok Remote IM** — local Grok Build via IM (Rust)",
+            "**Supercharge Remote IM** — local Supercharge via IM (Rust)",
             "",
             "Commands (Telegram: type `/` for the native menu):",
             "- `/start` · `/help` — this message",
@@ -185,8 +163,6 @@ pub fn help_text(lang: &str) -> String {
             "- `/r` · `/resume` — list / resume a prior session",
             "- `/r <n>` — resume by number",
             "- `/new` — fresh session (keep project)",
-            "- `/account` · `/quota` — list accounts & remaining SuperGrok quota",
-            "- `/account <n|label>` · `/switch <n>` — switch Grok account",
             "- `/whoami` — show your sender id",
             "- `/status` — snapshot",
             "- `/context` — current context usage (agent-reported or clearly marked estimate)",
@@ -197,7 +173,7 @@ pub fn help_text(lang: &str) -> String {
         .join("\n")
     } else {
         [
-            "**Grok Remote IM** — 本地 Grok Build 远程 IM 桥（Rust 内置）",
+            "**Supercharge Remote IM** — 本地 Supercharge 远程 IM 桥（Rust 内置）",
             "",
             "命令（Telegram 输入 `/` 可唤起原生命令菜单）：",
             "- `/start` · `/help` — 显示帮助",
@@ -206,8 +182,6 @@ pub fn help_text(lang: &str) -> String {
             "- `/r` · `/resume` — 列出 / 恢复历史会话",
             "- `/r <序号>` — 按序号恢复",
             "- `/new` — 保持项目，开启新会话",
-            "- `/account` · `/quota` — 查看已保存账号与剩余额度",
-            "- `/account <序号|标签>` · `/switch <序号>` — 切换 Grok 账号",
             "- `/whoami` — 查看发送者 id",
             "- `/status` — 状态快照",
             "- `/context` — 当前会话上下文用量（上报值或明确标注的估算值）",
@@ -273,55 +247,17 @@ mod tests {
     }
 
     #[test]
-    fn parses_account_and_aliases() {
-        assert_eq!(
-            parse_slash("/account"),
-            Some(BuiltinCommand::Account { query: None })
-        );
-        assert_eq!(
-            parse_slash("/accounts"),
-            Some(BuiltinCommand::Account { query: None })
-        );
-        assert_eq!(
-            parse_slash("/quota"),
-            Some(BuiltinCommand::Account { query: None })
-        );
-        assert_eq!(
-            parse_slash("/switch 2"),
-            Some(BuiltinCommand::Account {
-                query: Some("2".into())
-            })
-        );
-        assert_eq!(
-            parse_slash("/account@MyBot 1"),
-            Some(BuiltinCommand::Account {
-                query: Some("1".into())
-            })
-        );
-        assert_eq!(
-            parse_slash("/accounts@MyBot work"),
-            Some(BuiltinCommand::Account {
-                query: Some("work".into())
-            })
-        );
-    }
-
-    #[test]
-    fn native_catalog_has_account_once() {
-        let names: Vec<&str> = native_bot_commands().iter().map(|c| c.command).collect();
-        assert_eq!(names.iter().filter(|n| **n == "account").count(), 1);
-        assert!(names.contains(&"switch"));
-        assert!(names.contains(&"quota"));
-    }
-
-    #[test]
-    fn help_mentions_account() {
-        let zh = help_text("zh");
-        assert!(zh.contains("/account"));
-        assert!(zh.contains("额度") || zh.contains("账号"));
-        let en = help_text("en");
-        assert!(en.contains("/account"));
-        assert!(en.contains("quota") || en.contains("account"));
+    fn removed_account_commands_are_unknown() {
+        for command in ["/account", "/accounts", "/quota", "/switch 2"] {
+            assert!(matches!(
+                parse_slash(command),
+                Some(BuiltinCommand::Unknown { .. })
+            ));
+        }
+        let help = help_text("en");
+        assert!(!help.contains("/account"));
+        assert!(!help.contains("/quota"));
+        assert!(!help.contains("/switch"));
     }
 
     #[test]

@@ -703,22 +703,28 @@ mod badge_tests {
 
     #[test]
     fn busy_tooltip_suffix() {
-        assert_eq!(busy_tooltip("Grok", 0), "Grok");
-        assert_eq!(busy_tooltip("Grok", 2), "Grok · 2");
+        assert_eq!(busy_tooltip("Supercharge", 0), "Supercharge");
+        assert_eq!(busy_tooltip("Supercharge", 2), "Supercharge · 2");
     }
 
     #[test]
     fn quit_label_shows_ctrl_q_without_owning_the_text() {
         assert_eq!(
-            quit_tray_label_for("Quit Grok", false),
-            "Quit Grok (Ctrl+Q)"
+            quit_tray_label_for("Quit Supercharge", false),
+            "Quit Supercharge (Ctrl+Q)"
         );
         assert_eq!(
-            quit_tray_label_for("退出 Grok", false),
-            "退出 Grok (Ctrl+Q)"
+            quit_tray_label_for("退出 Supercharge", false),
+            "退出 Supercharge (Ctrl+Q)"
         );
-        assert_eq!(quit_tray_label_for("Quit Grok", true), "Quit Grok");
-        assert_eq!(quit_tray_label_for("退出 Grok", true), "退出 Grok");
+        assert_eq!(
+            quit_tray_label_for("Quit Supercharge", true),
+            "Quit Supercharge"
+        );
+        assert_eq!(
+            quit_tray_label_for("退出 Supercharge", true),
+            "退出 Supercharge"
+        );
     }
 
     /// Contract for #1174: failsafe must be armed before any show/focus work

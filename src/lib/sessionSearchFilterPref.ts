@@ -15,7 +15,7 @@ import {
   defaultSessionSearchFilterState,
 } from "./sessionSearch";
 
-export const SESSION_SEARCH_FILTER_STORAGE_KEY = "grok.sessionSearchFilters";
+export const SESSION_SEARCH_FILTER_STORAGE_KEY = "supercharge.sessionSearchFilters";
 
 /** Fired on `window` after a successful save (detail = SessionSearchFilterState). */
 export const SESSION_SEARCH_FILTER_CHANGE_EVENT =

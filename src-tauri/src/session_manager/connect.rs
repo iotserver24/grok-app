@@ -368,11 +368,11 @@ impl SessionManager {
             store::resolve_composer_prefs(meta.project_id.as_deref(), Some(meta.id.as_str()));
         let policy = PermissionPolicy::parse(&prefs.permission_policy);
         let agent_model = if ssh_alias.is_some() {
-            let m = prefs.model_id.trim();
-            if m.is_empty() || crate::providers::is_custom_provider_id(m) {
-                crate::providers::OFFICIAL_CATALOG_MODEL.to_string()
+            let requested = prefs.model_id.trim();
+            if requested.is_empty() || crate::providers::is_custom_provider_id(requested) {
+                String::new()
             } else {
-                m.to_string()
+                requested.to_string()
             }
         } else {
             crate::providers::agent_spawn_model_id(&prefs.model_id)
@@ -557,11 +557,14 @@ impl SessionManager {
                     // agent session id may belong to another App session.
                     if let Some(acp) = live.acp.clone() {
                         if let Some(sid) = live.meta.agent_session_id.clone() {
-                            if let Err(e) =
-                                Self::with_soft_rpc_budget(acp.set_model_for(&sid, &agent_model))
-                                    .await
-                            {
-                                tracing::warn!("acp set_model on unpark soft-fail: {e}");
+                            if !agent_model.is_empty() {
+                                if let Err(e) = Self::with_soft_rpc_budget(
+                                    acp.set_model_for(&sid, &agent_model),
+                                )
+                                .await
+                                {
+                                    tracing::warn!("acp set_model on unpark soft-fail: {e}");
+                                }
                             }
                             if let Err(e) =
                                 Self::with_soft_rpc_budget(acp.set_mode_for(&sid, &prefs.mode))
@@ -1114,7 +1117,7 @@ impl SessionManager {
             return Ok(snap);
         }
         let cli_path = if ssh_alias.is_some() {
-            std::path::PathBuf::from("grok")
+            std::path::PathBuf::from("supercharge")
         } else {
             let probe = crate::wsl_backend::probe_cli_for_settings(
                 &settings,
@@ -1126,7 +1129,7 @@ impl SessionManager {
                     if let Some(s) = guard.as_mut() {
                         let _ = s.fsm.connect_failed(AgentError::new(
                             AgentErrorCode::CliNotFound,
-                            "Grok Build CLI not found. Install Grok Build or set path in Settings.",
+                            "Supercharge CLI not found. Install Supercharge or set its path in Settings.",
                         ));
                     }
                 }
@@ -1162,7 +1165,7 @@ impl SessionManager {
                 .map(str::trim)
                 .is_some_and(|s| !s.is_empty());
         let spawn_opts = crate::acp_client::SpawnOptions {
-            model_id: Some(agent_model.clone()),
+            model_id: (!agent_model.is_empty()).then_some(agent_model.clone()),
             effort: Some(prefs.effort.clone()),
             permission_policy: Some(prefs.permission_policy.clone()),
             product_mode: Some(prefs.mode.clone()),
@@ -1177,19 +1180,11 @@ impl SessionManager {
             } else {
                 meta.plugin_dirs.clone()
             },
-            extra_rules: if ssh_alias.is_some() {
-                meta.extra_rules
-                    .as_ref()
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-            } else {
-                crate::official_aux::merge_extra_rules(
-                    meta.extra_rules
-                        .as_ref()
-                        .map(|s| s.trim())
-                        .filter(|s| !s.is_empty()),
-                )
-            },
+            extra_rules: meta
+                .extra_rules
+                .as_ref()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty()),
             max_agent_turns: meta.max_agent_turns,
             system_prompt_override: meta
                 .system_prompt_override
@@ -1468,7 +1463,7 @@ impl SessionManager {
                         s.model_id = Some(prefs.model_id.clone());
                         s.effort = Some(prefs.effort.clone());
                         s.product_mode = Some(prefs.mode.clone());
-                        s.backend = "grok_agent_stdio".into();
+                        s.backend = "supercharge_agent_stdio".into();
                         s.needs_history_bootstrap = need_bootstrap;
                         Self::touch_activity_locked(s);
                         meta = s.meta.clone();
@@ -1497,8 +1492,11 @@ impl SessionManager {
                 // session/set_model after session/new. Spawn `--model` alone is not
                 // enough when the composer id is an App `app_models` catalog id that
                 // CLI spawn resolves differently from ACP set_model.
-                if let Err(e) = Self::with_soft_rpc_budget(client.set_model(&agent_model)).await {
-                    tracing::warn!("acp set_model after session open soft-fail: {e}");
+                if !agent_model.is_empty() {
+                    if let Err(e) = Self::with_soft_rpc_budget(client.set_model(&agent_model)).await
+                    {
+                        tracing::warn!("acp set_model after session open soft-fail: {e}");
+                    }
                 }
                 emit_host_exit_heal(&app, &meta.id);
                 Ok(self.snapshot())
@@ -1770,7 +1768,7 @@ impl SessionManager {
         let cwd = crate::paths::general_workspace_dir();
         let effective_sandbox = store::resolve_sandbox_profile(&settings.sandbox_profile, None);
         let spawn_opts = crate::acp_client::SpawnOptions {
-            model_id: Some(agent_model),
+            model_id: (!agent_model.is_empty()).then_some(agent_model),
             effort: Some(prefs.effort.clone()),
             permission_policy: Some(prefs.permission_policy.clone()),
             product_mode: Some(prefs.mode.clone()),
@@ -1819,7 +1817,7 @@ impl SessionManager {
                     sandbox_profile: Some(effective_sandbox),
                     model_id: Some(prefs.model_id),
                     created_at: Instant::now(),
-                    backend: "grok_agent_stdio".into(),
+                    backend: "supercharge_agent_stdio".into(),
                 });
                 true
             } else {
@@ -2172,7 +2170,7 @@ mod connect_preserve_tests {
                 workspace_capability: None,
             },
             fsm,
-            backend: "grok_agent_stdio".into(),
+            backend: "supercharge_agent_stdio".into(),
             acp: None,
             mock_stream: None,
             streaming_message_id: Some("a-err".into()),
@@ -2271,7 +2269,7 @@ mod connect_preserve_tests {
                 workspace_capability: None,
             },
             fsm,
-            backend: "grok_agent_stdio".into(),
+            backend: "supercharge_agent_stdio".into(),
             acp: None,
             mock_stream: None,
             streaming_message_id: None,

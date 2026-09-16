@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 function Harness() {
-  const [value, setValue] = useState<WallpaperSourceTab>("x");
+  const [value, setValue] = useState<WallpaperSourceTab>("web");
   return (
     <WallpaperSourceTabs
       t={(key) => key}
@@ -43,7 +43,7 @@ describe("WallpaperSourceTabs", () => {
     );
     expect(
       groups.map((group) => group.getAttribute("data-source-group")),
-    ).toEqual(["discovery", "create", "personal"]);
+    ).toEqual(["discovery", "personal"]);
     expect(
       groups.map((group) =>
         Array.from(group.querySelectorAll('[role="tab"]')).map((tab) =>
@@ -52,20 +52,25 @@ describe("WallpaperSourceTabs", () => {
       ),
     ).toEqual([
       [
-        "settings.wallpaperFromX",
         "settings.wallpaperWeb",
         "settings.wallpaperOpenverse",
         "settings.wallpaperPexels",
       ],
-      ["settings.wallpaperImagine"],
-      ["settings.wallpaperGrokAlbum", "settings.wallpaperLibrary"],
+      ["settings.wallpaperLibrary"],
     ]);
     expect(
       screen.getByRole("tab", { name: "settings.wallpaperWeb" }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("tab", { name: "settings.wallpaperGrokAlbum" }),
-    ).toBeTruthy();
+      screen.queryByRole("tab", { name: "settings.wallpaperFromX" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("tab", { name: "settings.wallpaperImagine" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("tab", { name: "settings.wallpaperGrokAlbum" }),
+    ).toBeNull();
+    expect(screen.getAllByRole("tab")).toHaveLength(4);
   });
 
   it("associates every tab with the shared panel", () => {
@@ -81,7 +86,7 @@ describe("WallpaperSourceTabs", () => {
     ).toBe(true);
     expect(
       screen
-        .getByRole("tab", { name: "settings.wallpaperFromX" })
+        .getByRole("tab", { name: "settings.wallpaperWeb" })
         .getAttribute("tabindex"),
     ).toBe("0");
   });
@@ -90,17 +95,17 @@ describe("WallpaperSourceTabs", () => {
     render(<Harness />);
 
     fireEvent.keyDown(
-      screen.getByRole("tab", { name: "settings.wallpaperFromX" }),
+      screen.getByRole("tab", { name: "settings.wallpaperWeb" }),
       { key: "ArrowRight" },
     );
     expect(
       screen
-        .getByRole("tab", { name: "settings.wallpaperWeb" })
+        .getByRole("tab", { name: "settings.wallpaperOpenverse" })
         .getAttribute("aria-selected"),
     ).toBe("true");
 
     fireEvent.keyDown(
-      screen.getByRole("tab", { name: "settings.wallpaperWeb" }),
+      screen.getByRole("tab", { name: "settings.wallpaperOpenverse" }),
       { key: "End" },
     );
     expect(
@@ -115,7 +120,7 @@ describe("WallpaperSourceTabs", () => {
     );
     expect(
       screen
-        .getByRole("tab", { name: "settings.wallpaperFromX" })
+        .getByRole("tab", { name: "settings.wallpaperWeb" })
         .getAttribute("aria-selected"),
     ).toBe("true");
   });

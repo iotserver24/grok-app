@@ -1,6 +1,6 @@
 /**
  * App-chrome overlays: doctor, project rules, prompt-history / archive
- * confirms, worktrees, shortcuts, tutorial, live voice.
+ * confirms, worktrees, shortcuts, and tutorial.
  *
  * Compact / queue / ask-user / rewind stay with composer or session-turn
  * owners. Host still owns openSession / send / dialog verbs.
@@ -19,7 +19,6 @@ import type { ComposerSendKeyPref } from "@/lib/composerSendKey";
 import type { GitWorktreeChromeOverlay } from "@/hooks/useGitWorktreeChrome";
 import type { ArchiveAgePlan } from "@/lib/sessionArchiveAge";
 import type { ShortcutRemapMap } from "@/lib/shortcutRemap";
-import type { VoiceSessionChipInput } from "@/lib/voiceCommandCenter";
 import { useWhatsNew } from "@/hooks/useWhatsNew";
 
 const DoctorModal = lazy(async () => {
@@ -38,10 +37,7 @@ const WhatsNewModal = lazy(async () => {
   const m = await import("@/components/WhatsNewModal");
   return { default: m.WhatsNewModal };
 });
-const VoiceOverlay = lazy(async () => {
-  const m = await import("@/components/VoiceOverlay");
-  return { default: m.VoiceOverlay };
-});
+
 
 export type WorkbenchChromeOverlaysProps = {
   locale: Locale;
@@ -71,29 +67,12 @@ export type WorkbenchChromeOverlaysProps = {
   showShortcuts: boolean;
   composerSendKeyPref: ComposerSendKeyPref;
   shortcutRemaps: ShortcutRemapMap;
-  voiceHotkeyEnabled: boolean;
   closeShortcuts: () => void;
   showProductTutorial: boolean;
   closeProductTutorial: () => void;
   /** Workbench gate is ready (not setup / loading). */
   gateReady: boolean;
   setupOpen?: boolean;
-  liveVoiceOpen: boolean;
-  voiceLocale: Locale;
-  voiceProjectPath: string | null | undefined;
-  voiceProjectId: string | null;
-  voiceProjectName: string;
-  voiceId: string | null | undefined;
-  voiceKeepAgentsOnEnd: boolean;
-  voiceHasActiveSession: boolean;
-  voiceHasAuth: boolean;
-  voiceSessions: VoiceSessionChipInput[];
-  closeLiveVoice: () => void;
-  onLiveVoiceClassifiedNotice: (message: string) => void;
-  onSendVoiceTranscriptAsPrompt:
-    | ((prompt: string) => Promise<void>)
-    | undefined;
-  onVoiceFocusSession: (id: string) => void;
 };
 
 export function WorkbenchChromeOverlays(p: WorkbenchChromeOverlaysProps) {
@@ -198,7 +177,6 @@ export function WorkbenchChromeOverlays(p: WorkbenchChromeOverlaysProps) {
         platform={p.platform}
         composerSendKeyPref={p.composerSendKeyPref}
         shortcutRemaps={p.shortcutRemaps}
-        voiceHotkeyEnabled={p.voiceHotkeyEnabled}
         onClose={p.closeShortcuts}
       />
       {p.showProductTutorial ? (
@@ -220,26 +198,6 @@ export function WorkbenchChromeOverlays(p: WorkbenchChromeOverlaysProps) {
             version={whatsNew.version}
             notes={whatsNew.notes}
             onClose={whatsNew.close}
-          />
-        </Suspense>
-      ) : null}
-      {p.liveVoiceOpen ? (
-        <Suspense fallback={null}>
-          <VoiceOverlay
-            locale={p.voiceLocale}
-            open={p.liveVoiceOpen}
-            projectPath={p.voiceProjectPath}
-            projectId={p.voiceProjectId}
-            projectName={p.voiceProjectName}
-            voiceId={p.voiceId}
-            keepAgentsOnEnd={p.voiceKeepAgentsOnEnd}
-            hasActiveSession={p.voiceHasActiveSession}
-            hasVoiceAuth={p.voiceHasAuth}
-            sessions={p.voiceSessions}
-            onClose={p.closeLiveVoice}
-            onClassifiedNotice={p.onLiveVoiceClassifiedNotice}
-            onSendTranscriptAsPrompt={p.onSendVoiceTranscriptAsPrompt}
-            onFocusSession={p.onVoiceFocusSession}
           />
         </Suspense>
       ) : null}

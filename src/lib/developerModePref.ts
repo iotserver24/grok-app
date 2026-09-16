@@ -6,7 +6,7 @@
  * signed builds when the user opts in, and stays off by default.
  */
 
-export const DEVELOPER_MODE_STORAGE_KEY = "grok.developerMode";
+export const DEVELOPER_MODE_STORAGE_KEY = "supercharge.developerMode";
 
 /** Fired on `window` after a successful save (detail = boolean enabled). */
 export const DEVELOPER_MODE_CHANGE_EVENT = "grok-developer-mode-change";

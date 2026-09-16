@@ -6,7 +6,7 @@
 //!
 //! ## Background shell tools
 //!
-//! Grok Build may mark a long `run_terminal_command` as `completed` with a `[bg]`
+//! Supercharge may mark a long `run_terminal_command` as `completed` with a `[bg]`
 //! title (handed off to a background task), then keep streaming
 //! `tool_call_update` with `status=in_progress` for stdout. Host must not treat
 //! those late updates as re-opening the tool — otherwise `open_tool_ids` never

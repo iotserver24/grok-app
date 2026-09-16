@@ -102,7 +102,7 @@ describe("window chrome", () => {
 
   it("ships Windows shell integration for Show Desktop (frameless alone)", () => {
     // decorations:false + tray skip_taskbar needs win_shell.rs so Explorer
-    // ToggleDesktop still minimizes when Grok is the only window.
+    // ToggleDesktop still minimizes when Supercharge is the only window.
     const winShell = resolve(TAURI_DIR, "src/win_shell.rs");
     expect(existsSync(winShell)).toBe(true);
     const body = readSource(winShell);
@@ -112,7 +112,7 @@ describe("window chrome", () => {
     expect(body).toMatch(/ensure_main_window_shell_integration/);
     expect(body).toMatch(/set_main_window_skip_taskbar/);
     const conf = JSON.parse(readFileSync(CONF_PATH, "utf8")) as { identifier?: string };
-    expect(conf.identifier).toBe("com.grokapp.desktop");
+    expect(conf.identifier).toBe("com.supercharge.desktop");
     expect(body).toMatch(/pub fn set_process_app_user_model_id\(id: &str\)/);
   });
 
@@ -130,13 +130,17 @@ describe("window chrome", () => {
     expect(inner).toContain("ActivationPolicy::Regular");
   });
 
-  it("base product identity is Grok", () => {
-    const conf = JSON.parse(readFileSync(CONF_PATH, "utf8")) as {
-      productName?: string;
-      app: { windows: Array<{ title?: string }> };
-    };
-    expect(conf.productName).toBe("Grok");
-    expect(conf.app.windows[0]!.title).toBe("Grok");
+  it("uses the Supercharge product identity on every platform", () => {
+    for (const path of [CONF_PATH, MAC_PATH, WIN_PATH, LINUX_PATH]) {
+      const conf = JSON.parse(readFileSync(path, "utf8")) as {
+        productName?: string;
+        app: { windows: Array<{ title?: string }> };
+      };
+      if (path === CONF_PATH) {
+        expect(conf.productName).toBe("Supercharge");
+      }
+      expect(conf.app.windows[0]!.title).toBe("Supercharge");
+    }
   });
 
   it("uses window-vibrancy for native frosted glass on macOS", () => {

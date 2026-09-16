@@ -327,7 +327,7 @@ fn bool_lit(v: bool) -> &'static str {
 ///
 /// Write policy:
 /// - Section keys (`[ui]` / `[subagents]` / `[memory]` / `[workflows]` / `[features]`)
-///   use nested form matching Grok Build user-guide.
+///   use nested form matching Supercharge user-guide.
 /// - `auto_wake_enabled` is written top-level (App agent-home sync convention).
 /// - `workflows_enabled` / `two_pass_compaction_enabled` are written both as
 ///   nested user-guide form **and** top-level aliases so App helpers and CLI

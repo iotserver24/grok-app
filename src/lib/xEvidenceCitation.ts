@@ -252,7 +252,7 @@ export type WallpaperXEvidencePick = {
   at: string;
 };
 
-export const WALLPAPER_X_EVIDENCE_STORAGE_KEY = "grok.wallpaperXEvidence";
+export const WALLPAPER_X_EVIDENCE_STORAGE_KEY = "supercharge.wallpaperXEvidence";
 export const WALLPAPER_X_EVIDENCE_MAX = 40;
 
 /** Minimal storage surface so unit tests need no jsdom. */

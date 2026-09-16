@@ -1,7 +1,21 @@
 {
   "cases": [
     {
-      "name": "accepts grok url=",
+      "name": "accepts primary supercharge url=",
+      "input": "supercharge://skin/import?url=https%3A%2F%2Fskins.example%2Fpacks%2Fharbor.superchargeskin",
+      "ok": true,
+      "kind": "url",
+      "href": "https://skins.example/packs/harbor.superchargeskin"
+    },
+    {
+      "name": "accepts supercharge-app scheme",
+      "input": "supercharge-app://skin/import?url=https%3A%2F%2Fskins.example%2Fp.superchargeskin",
+      "ok": true,
+      "kind": "url",
+      "href": "https://skins.example/p.superchargeskin"
+    },
+    {
+      "name": "accepts legacy grok url=",
       "input": "grok://skin/import?url=https%3A%2F%2Fskins.example%2Fpacks%2Fharbor.grokskin",
       "ok": true,
       "kind": "url",

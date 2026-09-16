@@ -14,7 +14,7 @@ import {
 } from "./automationRunHistory";
 
 /** localStorage key for ids the user has marked read in the Inbox. */
-export const AUTOMATIONS_INBOX_SEEN_STORAGE_KEY = "grok.automationsInboxSeen";
+export const AUTOMATIONS_INBOX_SEEN_STORAGE_KEY = "supercharge.automationsInboxSeen";
 
 /** Cap seen-id set growth (ring history is already ~50). */
 export const AUTOMATIONS_INBOX_SEEN_MAX = 200;

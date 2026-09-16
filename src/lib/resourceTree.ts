@@ -3,11 +3,11 @@
  * Pure where possible; localStorage only inside load/save wrappers.
  */
 
-export const TREE_WIDTH_KEY = "grok-app.resourceTreeWidth";
+export const TREE_WIDTH_KEY = "supercharge-app.resourceTreeWidth";
 export const TREE_WIDTH_DEFAULT = 220;
 export const TREE_WIDTH_MIN = 140;
 export const TREE_WIDTH_MAX = 420;
-export const TREE_EXPAND_KEY_PREFIX = "grok-app.resourceTreeExpand:";
+export const TREE_EXPAND_KEY_PREFIX = "supercharge-app.resourceTreeExpand:";
 
 export type ResourceTreeNodeLike = {
   name: string;

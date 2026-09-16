@@ -14,7 +14,7 @@ use crate::agent_home_config::{set_top_level_bool, update_config_toml_if_indepen
 pub const TWO_PASS_COMPACTION_MIN_CLI: (u64, u64, u64) = (0, 2, 117);
 
 pub const CONFIG_KEY: &str = "two_pass_compaction_enabled";
-pub const ENV_KEY: &str = "GROK_TWO_PASS_COMPACTION";
+pub const ENV_KEY: &str = "SUPERCHARGE_TWO_PASS_COMPACTION";
 
 /// Normalize enable toggle (App default off).
 #[allow(dead_code)]

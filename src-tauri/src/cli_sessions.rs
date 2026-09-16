@@ -1,7 +1,7 @@
-//! Discover / import Grok Build CLI sessions from active GROK_HOME
-//! (shared `~/.grok` or independent agent-home).
+//! Discover / import Supercharge CLI sessions from active SUPERCHARGE_HOME
+//! (shared `~/.supercharge` or independent app-owned Supercharge home).
 //!
-//! Layout: `{GROK_HOME}/sessions/{percent-encoded-cwd}/{agent_session_id}/`
+//! Layout: `{SUPERCHARGE_HOME}/sessions/{percent-encoded-cwd}/{agent_session_id}/`
 //!   - summary.json — title, timestamps, cwd
 //!   - chat_history.jsonl — line-delimited messages
 
@@ -14,7 +14,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::paths::resolve_agent_grok_home;
+use crate::paths::resolve_agent_supercharge_home;
 use crate::session_manager::{
     extract_tool_input, tool_journal_richer, TOOL_OUTPUT_MAX_PUB, TOOL_OUTPUT_SENTINEL,
 };
@@ -34,14 +34,14 @@ pub struct CliSessionSummary {
     /// App session id when already linked (for one-click open / resume).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_session_id: Option<String>,
-    /// GROK_HOME used for discovery (path clarity independent vs shared).
+    /// SUPERCHARGE_HOME used for discovery (path clarity independent vs shared).
     pub source_home: String,
     /// First user prompt when known (search / enriched list only).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub first_prompt: Option<String>,
 }
 
-/// Search hit from `grok sessions search` or local first-prompt fallback.
+/// Search hit from `supercharge sessions search` or local first-prompt fallback.
 /// Compatible with list rows for import / open / delete in the UI.
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,7 +50,7 @@ pub struct CliSessionSearchHit {
     pub title: String,
     pub cwd: Option<String>,
     pub updated_at: String,
-    /// May be empty for remote-only hits not present under local GROK_HOME.
+    /// May be empty for remote-only hits not present under local SUPERCHARGE_HOME.
     pub dir: String,
     pub num_messages: u32,
     pub already_linked: bool,
@@ -62,7 +62,7 @@ pub struct CliSessionSearchHit {
     /// CLI status token when known (`local` / `remote`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
-    /// `"cli"` when from `grok sessions search`, `"local"` for disk fallback.
+    /// `"cli"` when from `supercharge sessions search`, `"local"` for disk fallback.
     pub source: String,
 }
 
@@ -95,9 +95,9 @@ struct SummaryInfo {
     cwd: Option<String>,
 }
 
-/// List CLI agent sessions under the active GROK_HOME (respects session_data_mode).
+/// List CLI agent sessions under the active SUPERCHARGE_HOME (respects session_data_mode).
 pub fn list_cli_sessions(session_data_mode: &str) -> Result<Vec<CliSessionSummary>, String> {
-    let home = resolve_agent_grok_home(session_data_mode);
+    let home = resolve_agent_supercharge_home(session_data_mode);
     let source_home = home.display().to_string();
     let sessions = home.join("sessions");
     if !sessions.is_dir() {
@@ -270,7 +270,7 @@ pub fn pick_latest_session_for_cwd<'a, T>(
 /// Find the most recent CLI agent session for a project path (CLI `-c/--continue`).
 ///
 /// Strategy:
-/// 1. Prefer the on-disk folder `{GROK_HOME}/sessions/{percent-encoded-cwd}/`
+/// 1. Prefer the on-disk folder `{SUPERCHARGE_HOME}/sessions/{percent-encoded-cwd}/`
 ///    and pick the newest `summary.json` / history under it.
 /// 2. Fall back to a full list scan matching decoded folder name or summary
 ///    `cwd` (handles path variants and folders encoded slightly differently).
@@ -285,7 +285,7 @@ pub fn find_latest_cli_session_for_cwd(
         return Ok(None);
     }
 
-    let home = resolve_agent_grok_home(session_data_mode);
+    let home = resolve_agent_supercharge_home(session_data_mode);
     let source_home = home.display().to_string();
     let sessions = home.join("sessions");
     if !sessions.is_dir() {
@@ -429,7 +429,7 @@ pub fn clamp_search_limit(limit: Option<u32>) -> u32 {
     limit.unwrap_or(40).clamp(1, 100)
 }
 
-/// Run `grok sessions search <query>` under the active GROK_HOME.
+/// Run `supercharge sessions search <query>` under the active SUPERCHARGE_HOME.
 ///
 /// Prefers `--json` when the CLI accepts it; otherwise parses text output.
 /// On CLI failure / missing binary, falls back to local disk filter that also
@@ -445,7 +445,7 @@ pub fn search_cli_sessions(
         return Ok(Vec::new());
     }
     let lim = clamp_search_limit(limit);
-    let home = resolve_agent_grok_home(session_data_mode);
+    let home = resolve_agent_supercharge_home(session_data_mode);
     let source_home = home.display().to_string();
 
     // Prefer real CLI when a binary is available.
@@ -472,7 +472,7 @@ pub fn search_cli_sessions(
                 tracing::warn!(
                     target: "session",
                     error = %e,
-                    "grok sessions search failed; falling back to local filter"
+                    "Supercharge sessions search failed; falling back to local filter"
                 );
             }
         }
@@ -481,7 +481,7 @@ pub fn search_cli_sessions(
     search_local_sessions(q, lim, session_data_mode)
 }
 
-/// Pure text parser for `grok sessions search` human output.
+/// Pure text parser for `supercharge sessions search` human output.
 pub fn parse_sessions_search_text(raw: &str) -> Vec<RawSearchHit> {
     let text = raw.replace("\r\n", "\n");
     if text.trim().is_empty() {
@@ -540,7 +540,7 @@ pub fn parse_sessions_search_text(raw: &str) -> Vec<RawSearchHit> {
     hits
 }
 
-/// Pure JSON parser for future `grok sessions search --json`.
+/// Pure JSON parser for future `supercharge sessions search --json`.
 pub fn parse_sessions_search_json(raw: &str) -> Option<Vec<RawSearchHit>> {
     let trimmed = raw.trim();
     if trimmed.is_empty() || !(trimmed.starts_with('{') || trimmed.starts_with('[')) {
@@ -697,7 +697,7 @@ impl RawSearchHitBuilder {
 }
 
 fn extract_session_id_prefix(s: &str) -> Option<&str> {
-    // UUID-shaped agent session ids (Grok uses UUID v7-ish).
+    // UUID-shaped Supercharge agent session ids (currently UUID v7-ish).
     let bytes = s.as_bytes();
     if bytes.len() < 36 {
         return None;
@@ -755,12 +755,13 @@ const SESSIONS_SEARCH_TIMEOUT_SECS: u64 = 25;
 
 fn run_sessions_search_cli(
     cli_path: &Path,
-    grok_home: &Path,
+    supercharge_home: &Path,
     query: &str,
     limit: u32,
 ) -> Result<Vec<RawSearchHit>, String> {
     // Try --json first (future CLI); fall back to text on unsupported flag.
-    let json_attempt = run_grok_sessions_search(cli_path, grok_home, query, limit, true);
+    let json_attempt =
+        run_supercharge_sessions_search(cli_path, supercharge_home, query, limit, true);
     match json_attempt {
         Ok((stdout, stderr, ok)) => {
             if let Some(hits) = parse_sessions_search_json(&stdout) {
@@ -779,7 +780,7 @@ fn run_sessions_search_cli(
                 // fall through
             } else if !ok {
                 return Err(format!(
-                    "grok sessions search failed: {}",
+                    "Supercharge sessions search failed: {}",
                     truncate_err(if stderr.is_empty() { &stdout } else { &stderr }, 240)
                 ));
             }
@@ -790,10 +791,11 @@ fn run_sessions_search_cli(
         }
     }
 
-    let (stdout, stderr, ok) = run_grok_sessions_search(cli_path, grok_home, query, limit, false)?;
+    let (stdout, stderr, ok) =
+        run_supercharge_sessions_search(cli_path, supercharge_home, query, limit, false)?;
     if !ok && stdout.trim().is_empty() {
         return Err(format!(
-            "grok sessions search failed: {}",
+            "Supercharge sessions search failed: {}",
             truncate_err(if stderr.is_empty() { &stdout } else { &stderr }, 240)
         ));
     }
@@ -804,9 +806,9 @@ fn run_sessions_search_cli(
     Ok(parse_sessions_search_text(&stdout))
 }
 
-fn run_grok_sessions_search(
+fn run_supercharge_sessions_search(
     cli_path: &Path,
-    grok_home: &Path,
+    supercharge_home: &Path,
     query: &str,
     limit: u32,
     with_json: bool,
@@ -823,16 +825,13 @@ fn run_grok_sessions_search(
     }
 
     let cli_path = cli_path.to_path_buf();
-    let grok_home = grok_home.to_path_buf();
+    let supercharge_home = supercharge_home.to_path_buf();
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let mut cmd = crate::process_util::command(&cli_path);
         cmd.args(&args);
-        cmd.env("GROK_HOME", &grok_home);
-        crate::process_util::ensure_home_env_std(&mut cmd);
-        if let Some(path_env) = crate::process_util::enriched_path_env() {
-            cmd.env("PATH", path_env);
-        }
+        cmd.env("SUPERCHARGE_HOME", &supercharge_home);
+        crate::process_util::apply_cli_env_std(&mut cmd);
         let _ = tx.send(cmd.output());
     });
 
@@ -842,9 +841,9 @@ fn run_grok_sessions_search(
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             Ok((stdout, stderr, output.status.success()))
         }
-        Ok(Err(e)) => Err(format!("Failed to run grok sessions search: {e}")),
+        Ok(Err(e)) => Err(format!("Failed to run supercharge sessions search: {e}")),
         Err(_) => Err(format!(
-            "grok sessions search timed out after {SESSIONS_SEARCH_TIMEOUT_SECS}s"
+            "supercharge sessions search timed out after {SESSIONS_SEARCH_TIMEOUT_SECS}s"
         )),
     }
 }
@@ -1046,7 +1045,7 @@ fn read_summary_bits(
     (title, cwd, updated, n)
 }
 
-/// Decode encodeURIComponent-style path segments used by Grok Build.
+/// Decode encodeURIComponent-style path segments used by Supercharge.
 pub fn percent_decode_component(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -1881,7 +1880,7 @@ pub fn try_reconcile_linked_session(app_session_id: &str) -> u32 {
 /// Import one CLI session into the App journal (independent App session row).
 ///
 /// Allowed in both shared and independent mode. In independent mode the scan
-/// path is the app agent-home (not terminal `~/.grok`); callers should surface
+/// path is the app-owned Supercharge home (not terminal `~/.supercharge`); callers should surface
 /// path clarity in the UI. Already-linked agent ids return the existing row
 /// without re-importing history.
 pub fn import_cli_session(
@@ -2084,12 +2083,12 @@ pub fn resolve_deletable_cli_session_dir(
         return Err(format!("not a directory: {}", target.display()));
     }
     if !is_strict_cli_session_dir(&target, &sessions_canon, agent_id) {
-        return Err("path not allowed: outside GROK_HOME/sessions or id mismatch".into());
+        return Err("path not allowed: outside SUPERCHARGE_HOME/sessions or id mismatch".into());
     }
     Ok(target)
 }
 
-/// Delete one CLI session directory under the active GROK_HOME only.
+/// Delete one CLI session directory under the active SUPERCHARGE_HOME only.
 ///
 /// Removes the on-disk tree (`summary.json`, `chat_history.jsonl`, …).
 /// Does **not** delete or unlink App chats — linked sidebar rows stay.
@@ -2098,7 +2097,7 @@ pub fn delete_cli_session(
     dir: Option<&str>,
     session_data_mode: &str,
 ) -> Result<(), String> {
-    let home = resolve_agent_grok_home(session_data_mode);
+    let home = resolve_agent_supercharge_home(session_data_mode);
     let sessions = home.join("sessions");
     let target = resolve_deletable_cli_session_dir(agent_session_id, dir, &sessions)?;
     fs::remove_dir_all(&target).map_err(|e| format!("delete failed: {e}"))?;
@@ -2106,7 +2105,7 @@ pub fn delete_cli_session(
         target: "session",
         agent = %agent_session_id,
         dir = %target.display(),
-        "deleted on-disk CLI session under GROK_HOME"
+        "deleted on-disk CLI session under SUPERCHARGE_HOME"
     );
     Ok(())
 }
@@ -2765,7 +2764,7 @@ mod tests {
         .unwrap();
         fs::write(other.join("chat_history.jsonl"), "").unwrap();
 
-        std::env::set_var("GROK_APP_HOME", &app_home);
+        std::env::set_var("SUPERCHARGE_APP_HOME", &app_home);
         let hit = find_latest_cli_session_for_cwd(proj, "independent")
             .unwrap()
             .expect("should find session");
@@ -2782,7 +2781,7 @@ mod tests {
                 .is_none()
         );
 
-        std::env::remove_var("GROK_APP_HOME");
+        std::env::remove_var("SUPERCHARGE_APP_HOME");
         let _ = fs::remove_dir_all(&app_home);
     }
 
@@ -2806,12 +2805,12 @@ mod tests {
         .unwrap();
         fs::write(dir.join("chat_history.jsonl"), "").unwrap();
 
-        std::env::set_var("GROK_APP_HOME", &app_home);
+        std::env::set_var("SUPERCHARGE_APP_HOME", &app_home);
         let hit = find_latest_cli_session_for_cwd("/Users/me/slash-proj/", "independent")
             .unwrap()
             .expect("trailing slash should still match");
         assert_eq!(hit.agent_session_id, "agent-slash");
-        std::env::remove_var("GROK_APP_HOME");
+        std::env::remove_var("SUPERCHARGE_APP_HOME");
         let _ = fs::remove_dir_all(&app_home);
     }
 

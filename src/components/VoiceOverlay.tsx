@@ -13,14 +13,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
-  sessionResolvePermission,
   voiceInvokeTool,
   voicePushPcm,
   voiceStart,
   voiceState,
   voiceStop,
   type VoiceSessionState,
-} from "@/lib/api";
+} from "@/lib/api/voice";
+import { sessionResolvePermission } from "@/lib/api/session";
 import { playPcm16Base64, startPcmCapture } from "@/lib/voiceAudio";
 import {
   buildVoiceSessionChips,

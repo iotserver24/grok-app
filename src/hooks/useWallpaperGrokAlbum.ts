@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as api from "@/lib/api";
-import { isDesktopHost } from "@/lib/api";
+import * as api from "@/lib/api/wallpaper";
+import { isDesktopHost } from "@/lib/api/host";
 import {
   GROK_ALBUM_PAGE_SIZE,
   grokAlbumItemsToGallery,

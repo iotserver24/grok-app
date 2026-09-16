@@ -5,7 +5,7 @@
  * Value is a data URL (image/png|jpeg|webp|svg+xml) or empty for default brand mark.
  */
 
-export const EXPORT_LOGO_STORAGE_KEY = "grok.exportLogoDataUrl";
+export const EXPORT_LOGO_STORAGE_KEY = "supercharge.exportLogoDataUrl";
 
 /** Fired on `window` after a successful save (detail = data URL or ""). */
 export const EXPORT_LOGO_CHANGE_EVENT = "grok-export-logo-change";

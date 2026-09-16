@@ -1,5 +1,5 @@
 /**
- * Sidebar brand mark for the new-session row: default Grok mark, or the
+ * Sidebar brand mark for the new-session row: Supercharge by default, or the
  * active custom provider brand when Appearance → “Replace brand logo” is on.
  *
  * Wordmark brands (DeepSeek, OpenCode) carry their own name — no extra label.
@@ -18,15 +18,14 @@ import type { ProviderBrandId } from "@/lib/providerPresets";
 import { SIDEBAR_BRAND_LOGO_HEIGHT } from "@/lib/replaceProviderBrandLogoPref";
 
 export type SidebarBrandProps = {
-  /** When true and `brandId` is set, swap Grok for the provider mark. */
+  /** When true and `brandId` is set, swap Supercharge for the provider mark. */
   replaceLogo?: boolean;
   /** Resolved brand for the active custom route (null = no known logo). */
   brandId?: ProviderBrandId | null;
-  /**
-   * Text beside icon-only marks (Volcengine / Amux), and the default “Grok”
-   * label when not replacing.
-   */
+  /** Text beside icon-only marks, and the default product label. */
   label?: string;
+  /** Product tagline shown under the default Supercharge label. */
+  subtitle?: string;
 };
 
 /**
@@ -40,7 +39,8 @@ export function isSidebarBrandWordmark(brand: ProviderBrandId): boolean {
 export const SidebarBrand = memo(function SidebarBrand({
   replaceLogo = false,
   brandId = null,
-  label = "Grok",
+  label = "Supercharge",
+  subtitle = "building beyond limits",
 }: SidebarBrandProps) {
   if (replaceLogo && brandId) {
     if (brandId === "deepseek") {
@@ -59,7 +59,6 @@ export const SidebarBrand = memo(function SidebarBrand({
         />
       );
     }
-    // Icon-only (Volcengine Ark, Amux, Zhipu): mark + label.
     const display = (label || brandId).trim() || brandId;
     return (
       <>
@@ -74,13 +73,13 @@ export const SidebarBrand = memo(function SidebarBrand({
     );
   }
 
-  // Preference off / no known brand: always Grok mark + "Grok" (never the
-  // active provider name — that would look like a partial swap).
-  // 16px matches sidebar nav item icons (IconScheduled / IconList / …).
   return (
     <>
       <GrokLogo size={16} />
-      <span className="sidebar-brand-row__label">Grok</span>
+      <span className="sidebar-brand-row__copy">
+        <span className="sidebar-brand-row__label">Supercharge</span>
+        <span className="sidebar-brand-row__subtitle">{subtitle}</span>
+      </span>
     </>
   );
 });

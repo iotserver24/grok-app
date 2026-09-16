@@ -6,7 +6,7 @@
 export const BOTTOM_TERMINAL_TABS_MAX = 12;
 export const BOTTOM_TERMINAL_HEIGHT_DEFAULT = 240;
 export const BOTTOM_TERMINAL_HEIGHT_MIN = 120;
-export const BOTTOM_TERMINAL_HEIGHT_STORAGE_KEY = "grok.bottomTerminal.height";
+export const BOTTOM_TERMINAL_HEIGHT_STORAGE_KEY = "supercharge.bottomTerminal.height";
 export const BOTTOM_TERMINAL_ORPHAN_KEY = "__orphan__";
 
 export type BottomTerminalTab = {

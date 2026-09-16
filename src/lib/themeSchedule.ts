@@ -26,7 +26,7 @@ export type ThemeScheduleConfig = {
   darkFrom: string;
 };
 
-export const THEME_SCHEDULE_STORAGE_KEY = "grok-app.themeSchedule";
+export const THEME_SCHEDULE_STORAGE_KEY = "supercharge-app.themeSchedule";
 
 /** Fired on `window` after a successful save (detail = config). */
 export const THEME_SCHEDULE_CHANGE_EVENT = "grok-theme-schedule-change";

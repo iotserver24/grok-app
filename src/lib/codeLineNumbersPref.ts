@@ -3,7 +3,7 @@
  * Frontend-only localStorage; default off.
  */
 
-export const CODE_LINE_NUMBERS_PREF_KEY = "grok.codeLineNumbers";
+export const CODE_LINE_NUMBERS_PREF_KEY = "supercharge.codeLineNumbers";
 
 /** Dispatched on `window` after a successful save (detail = new pref). */
 export const CODE_LINE_NUMBERS_PREF_EVENT = "grok:codeLineNumbersPref";

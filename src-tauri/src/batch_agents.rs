@@ -1,6 +1,6 @@
 //! Multi-project batch headless one-shot (soft-fail per project).
 //!
-//! Runs `grok -p <prompt>` with a project cwd and returns a short text summary.
+//! Runs `supercharge -p <prompt>` with a project cwd and returns a short text summary.
 //! Never panics on CLI missing / timeout / non-zero exit — returns structured soft-fail.
 
 use std::path::PathBuf;
@@ -177,9 +177,9 @@ pub fn run_batch_headless(
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         process_util::apply_cli_env_std(&mut cmd);
-        let grok_home = crate::paths::resolve_agent_grok_home(&mode);
-        let _ = std::fs::create_dir_all(&grok_home);
-        cmd.env("GROK_HOME", &grok_home);
+        let supercharge_home = crate::paths::resolve_agent_supercharge_home(&mode);
+        let _ = std::fs::create_dir_all(&supercharge_home);
+        cmd.env("SUPERCHARGE_HOME", &supercharge_home);
         if mode != "shared" {
             crate::providers::prepare_route_auth_for_agent();
         }

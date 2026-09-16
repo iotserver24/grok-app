@@ -44,14 +44,14 @@ describe("useSettingsNavigation", () => {
     ).toContain("runtime");
   });
 
-  it("generic open restores the last route", () => {
+  it("generic open canonicalizes removed account tabs to providers", () => {
     saveSettingsLastRoute({ section: "account", tab: "extras" });
     const { result } = setup();
     act(() => {
       result.current.navigateSettings();
     });
     expect(result.current.settingsSection).toBe("account");
-    expect(result.current.settingsTab).toBe("extras");
+    expect(result.current.settingsTab).toBe("providers");
   });
 
   it("closeSettings drops the overlay without a host pane callback", () => {

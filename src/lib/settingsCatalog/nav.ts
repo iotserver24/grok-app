@@ -34,12 +34,8 @@ export const SETTINGS_NAV: readonly SettingsNavDef[] = [
     icon: "user",
     labelKey: "settings.nav.account",
     group: "personal",
-    defaultTab: "official",
-    tabs: [
-      { id: "official", labelKey: "settings.tabOfficial" },
-      { id: "providers", labelKey: "settings.tabProviders" },
-      { id: "extras", labelKey: "settings.tabExtras" },
-    ],
+    defaultTab: "providers",
+    tabs: [{ id: "providers", labelKey: "settings.tabProviders" }],
   },
   {
     id: "archived",

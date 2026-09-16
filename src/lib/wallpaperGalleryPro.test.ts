@@ -58,9 +58,6 @@ describe("classifyWallpaperGalleryError", () => {
     expect(classifyWallpaperGalleryError({ code: "auth_required" })).toBe(
       "other",
     );
-    expect(classifyWallpaperGalleryError({ errorCode: "imagine_failed" })).toBe(
-      "other",
-    );
   });
 
   it("maps free-form host strings", () => {
@@ -172,7 +169,7 @@ describe("filterGalleryItems", () => {
     item({
       id: "c",
       kind: "image",
-      source: "imagine",
+      source: "library",
       prompt: "misty mountain lake",
       fullUrl: "file:///wallpapers/c.png",
       localPath: "/wallpapers/c.png",

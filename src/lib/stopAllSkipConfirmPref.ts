@@ -4,7 +4,7 @@
  * Default: false (always confirm before stopping all).
  */
 
-export const STOP_ALL_SKIP_CONFIRM_STORAGE_KEY = "grok.stopAllSkipConfirm";
+export const STOP_ALL_SKIP_CONFIRM_STORAGE_KEY = "supercharge.stopAllSkipConfirm";
 
 /** Fired on `window` after a successful save (detail = boolean skip). */
 export const STOP_ALL_SKIP_CONFIRM_CHANGE_EVENT =

@@ -1,6 +1,6 @@
 //! Per-app-session plan chrome persistence + agent plan_mode.json / plan.md snapshot.
 //!
-//! Survives App restart so Resources → Plan can re-show draft body while Grok Build
+//! Survives App restart so Resources → Plan can re-show draft body while Supercharge
 //! re-parks `exit_plan_mode` on the next `session/load`. Stored `rpcId` is never
 //! treated as live after load — reverse-RPC ids die with the process.
 

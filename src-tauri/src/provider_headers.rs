@@ -1,4 +1,4 @@
-//! Per-channel `extra_headers` for Grok Build `[model.<id>]`.
+//! Per-channel `extra_headers` for Supercharge `[model.<id>]`.
 //!
 //! CLI sends these verbatim on inference requests. App stores the inline TOML
 //! table Grok already documents (`extra_headers = { "Name" = "value" }`).

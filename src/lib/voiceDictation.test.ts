@@ -343,7 +343,6 @@ describe("resolveVoiceMicChrome", () => {
   const base = {
     gateAvailable: true,
     autoSend: false,
-    liveVoiceOpen: false,
     canType: true,
   };
 
@@ -389,20 +388,5 @@ describe("resolveVoiceMicChrome", () => {
     expect(c.labelKind).toBe("unavailable");
     expect(c.unavailableClass).toBe(true);
     expect(c.interactive).toBe(true);
-  });
-
-  it("live voice overlay blocks start but not mid-dictation cancel", () => {
-    const idle = resolveVoiceMicChrome({
-      ...base,
-      phase: "idle",
-      liveVoiceOpen: true,
-    });
-    expect(idle.interactive).toBe(false);
-    const rec = resolveVoiceMicChrome({
-      ...base,
-      phase: "recording",
-      liveVoiceOpen: true,
-    });
-    expect(rec.interactive).toBe(true);
   });
 });

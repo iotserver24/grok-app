@@ -40,23 +40,21 @@ import type { WorkbenchSettingsStageProps } from "@/app/workbenchSettingsStagePr
 
 export function WorkbenchSettingsStage(p: WorkbenchSettingsStageProps) {
   const {
-    account, accountBusy, accountHeatmapError, accountLoading, accountProbeError, acpServerAddr,
-    activeAccountId, activeProject, agentCatalog, agentIdleMinutes, agentProfilePath, agentsJson,
+    acpServerAddr, activeProject, agentCatalog, agentIdleMinutes, agentProfilePath, agentsJson,
     allowUnverifiedCliInstall, allowedTools, applyComposerPrefs, applyGlobalSandboxProfile, applyPermissionPolicy, applySkinChoice,
     applyThemeChoice, applyThemeScheduleChoice, applyWallpaperAdjustChoice, applyWallpaperChoice, applyWallpaperMediaSize, applyWallpaperScrimChoice, applyWallpaperBlurChoice,
     archivedGroups, askUserTimeoutSec, auditLedgerRetentionDays, autoWakeEnabled, availableModels, backgroundWaitPolicy,
-    backgroundWaitTimeoutSec, cancelAccountLogin, cliAgentSkewRepairing, cliInfo, closeToTray, compactionDetail,
+    backgroundWaitTimeoutSec, cliAgentSkewRepairing, cliInfo, closeToTray, compactionDetail,
     compactionMode, confirmArchiveOlderThan, defaultOpenTarget, deleteSessionsConfirm, disableWebSearch, disallowedTools,
-    effectiveProjectPath, experimentalMemory, goalOrchUiEnabled, handleClearAllSessionMutes, handleClearAllSessionUnread, importChatTranscript,
+    effectiveProjectPath, experimentalMemory, goalOrchUiEnabled, handleClearAllSessionMutes, handleClearAllSessionUnread,
     includePartialMessages, keepTrayForSchedules, lastCliChecksumVerified, lastProcessLimit, launchAtLogin, locale,
-    localePreference, loginHint, manualCliPath, maxAgentTurns, maxConcurrentAgents, messageTimeFormat,
+    localePreference, manualCliPath, maxAgentTurns, maxConcurrentAgents, messageTimeFormat,
     mutedSessionIds, navigateSettings, navigateWorkbench, noAskUser, notifyOnPermission, notifyOnTurnDone,
     notifySound, openAsidePane, openBatchAgents, openDoctor, openReliability, openSandboxWizardGuide,
     permissionTimeoutSec, phoneLayout, planEnabled, policy, prHubHighlightPr, preferredAgent,
     prefsScope, projects, proxyMode, proxyNoProxy, proxyUrl, refreshAccount,
     refreshProviderRoute, refreshSessions, refreshVoiceGate, reopenLastSession, replaceProviderBrandLogo, restoreSessions,
-    runAccountLogin, runAccountLogout, runAddAccount, runRemoveAccount, runSaveAccount, runSwitchAccount,
-    sandboxProfile, savedAccounts, session, sessionDataMode, sessions, setAcpServerAddr,
+    sandboxProfile, session, sessionDataMode, sessions, setAcpServerAddr,
     setAgentIdleMinutes, setAgentProfilePath, setAgentsJson, setAllowUnverifiedCliInstall, setAllowedTools, setAppDialog,
     setAskUserTimeoutSec, setAuditLedgerRetentionDays, setAutoWakeEnabled, setBackgroundWaitPolicy, setBackgroundWaitTimeoutSec, setCliAgentSkewRepairing,
     setCliInfo, setCloseToTray, setCompactionDetail, setCompactionMode, setDefaultOpenTarget, setDisableWebSearch,
@@ -68,14 +66,13 @@ export function WorkbenchSettingsStage(p: WorkbenchSettingsStageProps) {
     setSetup, setShowMessageTimestamps, setShowProductTutorial, setShowReplyLength, setShowShortcuts, setSidebarShowRelativeTime,
     setSkillsReloadToken, setStoreApiKeysInKeychain, setStreamStallSeconds, setSttCustomBaseUrl, setSttCustomLanguage, setSttCustomModel,
     setSttEngine, setSttZhScript, setSubagentWorktreeSnapshotEnabled, setSubagentsEnabled, setToast, setTodoGateEnabled,
-    setTodoGateMaxFiresPerPrompt, setTrayBusyBadge, setTwoPassCompactionEnabled, setUseLeader, setVoiceDictationAutoSend, setVoiceId,
-    setVoiceKeepAgentsOnEnd, setWinTaskbarOverlay, setWindowAlwaysOnTop, setWorkflowsEnabled, setZenModeEnabled, settingsFocusAnchor,
+    setTodoGateMaxFiresPerPrompt, setTrayBusyBadge, setTwoPassCompactionEnabled, setUseLeader, setVoiceDictationAutoSend, setWinTaskbarOverlay, setWindowAlwaysOnTop, setWorkflowsEnabled, setZenModeEnabled, settingsFocusAnchor,
     settingsLabels, settingsSection, settingsTab, showMessageTimestamps, showReplyLength,
     showToast, sidebarShowRelativeTime, skin, storeApiKeysInKeychain, streamStallSeconds, sttCustomBaseUrl,
     sttCustomLanguage, sttCustomModel, sttEngine, sttZhScript, subagentWorktreeSnapshotEnabled, subagentsEnabled,
-    submitAccountLoginCode, theme, themePreference, themeSchedule, todoGateEnabled, todoGateMaxFiresPerPrompt,
+    theme, themePreference, themeSchedule, todoGateEnabled, todoGateMaxFiresPerPrompt,
     tr, trayBusyBadge, trayHandlersRef, twoPassCompactionEnabled, unreadSessionIds, useLeader,
-    voiceDictationAutoSend, voiceId, voiceKeepAgentsOnEnd, wallpaperRecord, wallpaperScrim, wallpaperBlur, wallpaperUrl,
+    voiceDictationAutoSend, wallpaperRecord, wallpaperScrim, wallpaperBlur, wallpaperUrl,
     winTaskbarOverlay, windowAlwaysOnTop, workflowsEnabled, zenMode,
     welcomeMotionEnabled, setWelcomeMotionEnabled,
   } = p;
@@ -428,26 +425,11 @@ export function WorkbenchSettingsStage(p: WorkbenchSettingsStageProps) {
           api.settingsSet({ ...s, twoPassCompactionEnabled: v }),
           );
           }}
-          voiceId={voiceId}
-          onVoiceId={(v) => {
-          const next = (v || "eve").trim() || "eve";
-          setVoiceId(next);
-          void api.settingsGet().then((s) =>
-          api.settingsSet({ ...s, voiceId: next }),
-          );
-          }}
           voiceDictationAutoSend={voiceDictationAutoSend}
           onVoiceDictationAutoSend={(v) => {
           setVoiceDictationAutoSend(v);
           void api.settingsGet().then((s) =>
           api.settingsSet({ ...s, voiceDictationAutoSend: v }),
-          );
-          }}
-          voiceKeepAgentsOnEnd={voiceKeepAgentsOnEnd}
-          onVoiceKeepAgentsOnEnd={(v) => {
-          setVoiceKeepAgentsOnEnd(v);
-          void api.settingsGet().then((s) =>
-          api.settingsSet({ ...s, voiceKeepAgentsOnEnd: v }),
           );
           }}
           sttEngine={sttEngine}
@@ -708,27 +690,6 @@ export function WorkbenchSettingsStage(p: WorkbenchSettingsStageProps) {
           versionFooter={tr("app.versionFooter", {
             version: appDisplayVersion(),
           })}
-          account={account}
-          accountLoading={accountLoading}
-          accountBusy={accountBusy}
-          accountHeatmapError={accountHeatmapError}
-          accountProbeError={accountProbeError}
-          loginHint={loginHint}
-          savedAccounts={savedAccounts}
-          activeAccountId={activeAccountId}
-          onAccountLoginOauth={() => void runAccountLogin("oauth")}
-          onAccountLoginDevice={() => void runAccountLogin("device")}
-          onAccountLoginSubmitCode={(code) => void submitAccountLoginCode(code)}
-          onCancelLogin={() => void cancelAccountLogin()}
-          onAccountLogout={() => void runAccountLogout()}
-          onAccountRefresh={() => void refreshAccount({ refreshBilling: true })}
-          onAccountManageUsage={() => void api.accountOpenUsage()}
-          onAccountSubscribe={() => void api.accountOpenSubscribe()}
-          onSaveAccount={() => void runSaveAccount()}
-          onAddAccount={() => void runAddAccount()}
-          onSwitchAccount={(id) => void runSwitchAccount(id)}
-          onRemoveAccount={(id) => void runRemoveAccount(id)}
-          onImportChat={() => void importChatTranscript()}
           defaultOpenTarget={defaultOpenTarget}
           onDefaultOpenTarget={(v) => {
             setDefaultOpenTarget(v);

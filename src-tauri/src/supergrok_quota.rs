@@ -62,7 +62,7 @@ impl AccountQuotaSnapshot {
 fn product_label(id: u32) -> String {
     match id {
         1 => "API".into(),
-        2 => "Grok Build".into(),
+        2 => "Supercharge".into(),
         4 => "Other".into(),
         _ => format!("Product {id}"),
     }
@@ -139,7 +139,7 @@ pub async fn fetch_quota_snapshot(access_token: &str) -> Result<AccountQuotaSnap
     Ok(snap)
 }
 
-/// Fallback: JSON billing used by Grok Build CLI extension.
+/// Fallback: JSON billing used by Supercharge CLI extension.
 pub async fn fetch_quota_via_cli_proxy(access_token: &str) -> Result<AccountQuotaSnapshot, String> {
     let client = crate::proxy::apply_to_reqwest(reqwest::Client::builder())
         .timeout(SUPERGROK_TIMEOUT)
@@ -191,7 +191,7 @@ pub async fn fetch_quota_via_cli_proxy(access_token: &str) -> Result<AccountQuot
                 .unwrap_or(0.0) as f32;
             let product_id = match name {
                 "Api" | "API" => 1,
-                "GrokBuild" | "Grok Build" => 2,
+                "GrokBuild" | "Supercharge" => 2,
                 "GrokChat" => 4,
                 _ => 0,
             };

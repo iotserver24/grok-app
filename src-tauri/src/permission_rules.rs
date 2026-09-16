@@ -1,4 +1,4 @@
-//! Grok Build `[permission]` allow / deny / ask rules in agent `config.toml`.
+//! Supercharge `[permission]` allow / deny / ask rules in agent `config.toml`.
 //!
 //! Compact form (CLI `--allow` / `--deny` strings):
 //! ```toml
@@ -8,7 +8,7 @@
 //! ask = ["Edit"]
 //! ```
 //!
-//! Evaluation order is deny > ask > allow (Grok Build docs). This module only
+//! Evaluation order is deny > ask > allow (Supercharge docs). This module only
 //! manages the string-array keys; other `[permission]` keys (e.g. structured
 //! `rules`) are left untouched. Writes target the active GROK_HOME for the
 //! current `session_data_mode` (agent-home or `~/.grok`).

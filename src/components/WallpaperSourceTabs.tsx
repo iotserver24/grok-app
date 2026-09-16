@@ -5,11 +5,8 @@ import {
 } from "react";
 import {
   IconCamera,
-  IconExportImage,
   IconFolder,
-  IconImagine,
   IconPhotoSearch,
-  IconSearch,
   IconWorld,
 } from "@/components/icons";
 import type { MessageKey } from "@/i18n";
@@ -31,11 +28,6 @@ const SOURCE_TAB_GROUPS: ReadonlyArray<SourceTabGroup> = [
     id: "discovery",
     tabs: [
       {
-        id: "x",
-        labelKey: "settings.wallpaperFromX",
-        icon: <IconSearch size={15} />,
-      },
-      {
         id: "web",
         labelKey: "settings.wallpaperWeb",
         icon: <IconWorld size={15} />,
@@ -53,23 +45,8 @@ const SOURCE_TAB_GROUPS: ReadonlyArray<SourceTabGroup> = [
     ],
   },
   {
-    id: "create",
-    tabs: [
-      {
-        id: "imagine",
-        labelKey: "settings.wallpaperImagine",
-        icon: <IconImagine size={15} />,
-      },
-    ],
-  },
-  {
     id: "personal",
     tabs: [
-      {
-        id: "grok_album",
-        labelKey: "settings.wallpaperGrokAlbum",
-        icon: <IconExportImage size={15} />,
-      },
       {
         id: "library",
         labelKey: "settings.wallpaperLibrary",

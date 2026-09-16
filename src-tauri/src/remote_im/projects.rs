@@ -1,4 +1,4 @@
-//! Load trusted projects from Grok App `projects.json`.
+//! Load trusted projects from Supercharge App `projects.json`.
 //!
 //! Project scope formats (GUI + legacy):
 //! - `"all_trusted"` (string) — Settings default

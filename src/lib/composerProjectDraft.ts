@@ -15,7 +15,7 @@ import {
 } from "@/lib/composerQuotes";
 import { isDraftEmpty, parseStoredContent } from "@/lib/draftDoc";
 
-export const COMPOSER_PROJECT_DRAFTS_STORAGE_KEY = "grok.composerProjectDrafts";
+export const COMPOSER_PROJECT_DRAFTS_STORAGE_KEY = "supercharge.composerProjectDrafts";
 
 /** Key for chats with no project (sidebar Default workspace). */
 export const ORPHAN_PROJECT_DRAFT_KEY = "__orphan__";

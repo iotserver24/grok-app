@@ -6,7 +6,7 @@
  * when the hotkey is disabled. Dictation (Ctrl+Space) is unrelated.
  */
 
-export const VOICE_HOTKEY_STORAGE_KEY = "grok.voiceHotkeyEnabled";
+export const VOICE_HOTKEY_STORAGE_KEY = "supercharge.voiceHotkeyEnabled";
 
 /** Fired on `window` after a same-tab preference save. */
 export const VOICE_HOTKEY_CHANGED_EVENT = "grok:voiceHotkeyEnabled";

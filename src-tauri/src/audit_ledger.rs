@@ -369,7 +369,7 @@ fn take_permission(session_id: &str, rpc_id: u64) -> Option<PendingPermission> {
 pub fn append_entry(entry: &AuditLedgerEntry) {
     let _guard = WRITE_LOCK.lock();
     if let Err(e) = append_entry_locked(entry) {
-        tracing::warn!(target: "grok_app::audit_ledger", "append failed: {e}");
+        tracing::warn!(target: "supercharge_app::audit_ledger", "append failed: {e}");
     }
 }
 
@@ -440,7 +440,7 @@ fn maybe_rotate_locked(path: &std::path::Path) -> Result<(), String> {
     }
     fs::rename(&tmp, path).map_err(|e| format!("rotate rename: {e}"))?;
     tracing::info!(
-        target: "grok_app::audit_ledger",
+        target: "supercharge_app::audit_ledger",
         kept = lines.len(),
         "rotated tool ledger (size budget)"
     );
@@ -519,7 +519,7 @@ fn maybe_prune_locked(path: &std::path::Path, retention_days: u32) -> Result<u32
     }
     fs::rename(&tmp, path).map_err(|e| format!("prune rename: {e}"))?;
     tracing::info!(
-        target: "grok_app::audit_ledger",
+        target: "supercharge_app::audit_ledger",
         kept = kept_entries,
         dropped,
         days,
@@ -700,7 +700,7 @@ pub fn list_recent(limit: Option<u32>) -> Vec<AuditLedgerEntry> {
     match list_recent_locked(lim) {
         Ok(v) => v,
         Err(e) => {
-            tracing::warn!(target: "grok_app::audit_ledger", "list failed: {e}");
+            tracing::warn!(target: "supercharge_app::audit_ledger", "list failed: {e}");
             Vec::new()
         }
     }
@@ -774,7 +774,7 @@ pub fn export_redacted_jsonl_filtered(filter: &AuditLedgerFilter) -> String {
             out
         }
         Err(e) => {
-            tracing::warn!(target: "grok_app::audit_ledger", "export read failed: {e}");
+            tracing::warn!(target: "supercharge_app::audit_ledger", "export read failed: {e}");
             String::new()
         }
     }

@@ -1,4 +1,4 @@
-import * as api from "@/lib/api";
+import * as api from "@/lib/api/wallpaper";
 import { isGrokAlbumMediaUrl } from "@/lib/grokAlbum";
 import { createWallpaperThumbnailCache } from "@/lib/wallpaperThumbnailCache";
 

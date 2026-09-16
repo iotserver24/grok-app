@@ -51,7 +51,7 @@ const APP_CHECKS: DoctorCheck[] = [
     id: "backend",
     level: "ok",
     title: "Backend",
-    detail: "Agent backend: grok_agent_stdio",
+    detail: "Agent backend: supercharge_agent_stdio",
   },
   {
     id: "logs",

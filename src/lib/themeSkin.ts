@@ -66,18 +66,18 @@ export interface ThemeSkinMeta {
   appearance: ThemeSkinAppearance;
 }
 
-export const SKIN_STORAGE_KEY = "grok-app.skin";
-export const WALLPAPER_STORAGE_KEY = "grok-app.wallpaper";
+export const SKIN_STORAGE_KEY = "supercharge-app.skin";
+export const WALLPAPER_STORAGE_KEY = "supercharge-app.wallpaper";
 /** Scrim opacity over wallpaper only (0 = clear veil, 100 = full dim). */
-export const WALLPAPER_SCRIM_STORAGE_KEY = "grok-app.wallpaper-scrim";
+export const WALLPAPER_SCRIM_STORAGE_KEY = "supercharge-app.wallpaper-scrim";
 /** Wallpaper media / overlay blur (0 = sharp, 100 = full built-in blur). */
-export const WALLPAPER_BLUR_STORAGE_KEY = "grok-app.wallpaper-blur";
+export const WALLPAPER_BLUR_STORAGE_KEY = "supercharge-app.wallpaper-blur";
 /** Chat composer + workspace bar opacity (0–100). Independent of wallpaper scrim. */
-export const COMPOSER_OPACITY_STORAGE_KEY = "grok-app.composer-opacity";
+export const COMPOSER_OPACITY_STORAGE_KEY = "supercharge-app.composer-opacity";
 /** File cards / code / user bubbles / resource controls (0–100). Independent of scrim. */
-export const UI_OPACITY_STORAGE_KEY = "grok-app.ui-opacity";
+export const UI_OPACITY_STORAGE_KEY = "supercharge-app.ui-opacity";
 /** Settings overlay fill over wallpaper (0–100). Independent of scrim. */
-export const SETTINGS_OPACITY_STORAGE_KEY = "grok-app.settings-opacity";
+export const SETTINGS_OPACITY_STORAGE_KEY = "supercharge-app.settings-opacity";
 /** Default matches the built-in gradient at full opacity. */
 export const DEFAULT_WALLPAPER_SCRIM = 100;
 /**

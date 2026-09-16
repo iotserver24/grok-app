@@ -6,7 +6,7 @@
  */
 
 export const ALWAYS_QUIT_WITHOUT_ASKING_STORAGE_KEY =
-  "grok.alwaysQuitWithoutAsking";
+  "supercharge.alwaysQuitWithoutAsking";
 
 /** Fired on `window` after a successful save (detail = boolean enabled). */
 export const ALWAYS_QUIT_WITHOUT_ASKING_CHANGE_EVENT =

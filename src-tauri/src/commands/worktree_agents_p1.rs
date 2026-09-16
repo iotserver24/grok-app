@@ -115,7 +115,7 @@ pub struct PersonaDefDto {
 
 // from PR #77
 
-/// Read-only soft-fail list of discovered Grok Build workflow scripts
+/// Read-only soft-fail list of discovered Supercharge workflow scripts
 /// (`~/.grok/workflows` + project `.grok/workflows` + independent agent-home).
 /// Never invents runners; empty dirs return an empty list.
 #[tauri::command]
@@ -136,10 +136,10 @@ pub async fn workflows_list(
     Ok(result)
 }
 
-/// Soft-fail headless run of a discovered Grok Build workflow by name.
+/// Soft-fail headless run of a discovered Supercharge workflow by name.
 ///
 /// There is no top-level `grok workflow` CLI subcommand; the host spawns a
-/// short `grok -p` that must call the agent `workflow` tool. Default mode is
+/// short `supercharge -p` that must call the agent `workflow` tool. Default mode is
 /// `validate` (`validate_only: true` smoke). Returns structured ok / reason /
 /// redacted truncated log — never panics on CLI missing / timeout.
 #[tauri::command]
@@ -365,7 +365,7 @@ pub fn normalize_worktree_layout(raw: Option<&str>) -> &'static str {
 }
 
 /// Shared CLI GROK_HOME (`~/.grok`) used for worktree placement.
-/// Matches Grok Build 0.2.x `~/.grok/worktrees/<repo>/…` regardless of
+/// Matches Supercharge 0.2.x `~/.grok/worktrees/<repo>/…` regardless of
 /// App independent agent-home (git worktrees are filesystem layout, not session store).
 pub fn shared_cli_grok_home() -> std::path::PathBuf {
     crate::process_util::user_home().join(".grok")
@@ -396,7 +396,7 @@ pub fn worktree_repo_slug(main_worktree_path: &str) -> Result<String, String> {
 /// Example: grok_home `~/.grok`, main `/Users/me/Code/oss-grok-app`, name `feat`
 /// → `~/.grok/worktrees/oss-grok-app/feat`.
 ///
-/// Matches Grok Build 0.2.x (`grok --worktree=…`, `grok worktree list`).
+/// Matches Supercharge 0.2.x (`supercharge --worktree=…`, `grok worktree list`).
 pub fn build_worktree_cli_path(
     main_worktree_path: &str,
     name: &str,
@@ -508,7 +508,7 @@ pub async fn cli_doctor_fix(id: String) -> Result<serde_json::Value, String> {
 
 // from PR #63
 
-/// Run resolved `grok update --check --json` and return a typed DTO.
+/// Run resolved `supercharge update --check --json` and return a typed DTO.
 ///
 /// Also attaches App compatibility fields (#1009): current App version, absolute
 /// floor, and a best-effort GitHub App-update probe so the UI can warn before
@@ -643,7 +643,7 @@ fn extract_agent_description_from_content(content: &str) -> Option<String> {
 /// Create a linked git worktree, then return its path.
 ///
 /// Default layout (`cli` / omitted): `{GROK_HOME}/worktrees/<repo>/<name>`
-/// aligned with Grok Build 0.2.x (`grok --worktree=…`).
+/// aligned with Supercharge 0.2.x (`supercharge --worktree=…`).
 /// Optional `layout = "sibling"`: `<parent>/<main_basename>-<name>`.
 ///
 /// Args are passed to `git` as an argv array (no shell) to avoid injection.

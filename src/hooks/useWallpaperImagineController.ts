@@ -8,7 +8,9 @@ import {
   type SetStateAction,
 } from "react";
 import type { MessageKey } from "@/i18n";
-import * as api from "@/lib/api";
+import * as wallpaperApi from "@/lib/api/wallpaper";
+import { isDesktopHost } from "@/lib/api/host";
+import { pickAttachFiles } from "@/lib/api/fs";
 import {
   dedupeGalleryItems,
   errorCodeFromSearchResult,
@@ -134,7 +136,7 @@ export function useWallpaperImagineController({
     cancelledVideoRequestsRef.current.add(requestId);
     setCancelling(true);
     try {
-      await api.wallpaperImageToVideoCancel(requestId);
+      await wallpaperApi.wallpaperImageToVideoCancel(requestId);
     } catch (error) {
       cancelledVideoRequestsRef.current.delete(requestId);
       if (
@@ -160,7 +162,7 @@ export function useWallpaperImagineController({
     activeVideoRequestRef.current = null;
     if (requestId) {
       cancelledVideoRequestsRef.current.add(requestId);
-      void api.wallpaperImageToVideoCancel(requestId).catch(() => false);
+      void wallpaperApi.wallpaperImageToVideoCancel(requestId).catch(() => false);
     }
   }, [cancelSourcePreparation]);
 
@@ -204,7 +206,7 @@ export function useWallpaperImagineController({
     if (!enabled) return;
     const generation = ++recoveryListGenerationRef.current;
     let active = true;
-    void api
+    void wallpaperApi
       .wallpaperImaginePendingRecoveries()
       .then((recoveries) => {
         if (
@@ -367,17 +369,17 @@ export function useWallpaperImagineController({
 
   const uploadSource = useCallback(async () => {
     if (generating || uploading || mode === "image") return;
-    if (!api.isDesktopHost()) {
+    if (!isDesktopHost()) {
       setError(t("settings.wallpaperSource.err.desktopOnly"));
       return;
     }
     const generation = ++uploadGenerationRef.current;
     setUploading(true);
     try {
-      const paths = await api.pickAttachFiles();
+      const paths = await pickAttachFiles();
       if (generation !== uploadGenerationRef.current || !paths.length) return;
       if (paths.length !== 1) throw new Error("imagine_source_invalid");
-      const local = await api.wallpaperImportImage(paths[0]);
+      const local = await wallpaperApi.wallpaperImportImage(paths[0]);
       if (generation !== uploadGenerationRef.current) return;
       beginVideoFromItem({
         id: `upload-${local.path}`, source: "library", kind: "image",
@@ -410,7 +412,7 @@ export function useWallpaperImagineController({
       setError(wallpaperSourceErrorMessage(t, "imagine_source_invalid"));
       return;
     }
-    if (!api.isDesktopHost()) {
+    if (!isDesktopHost()) {
       setErrorCode("generic");
       setError(t("settings.wallpaperSource.err.desktopOnly"));
       return;
@@ -438,7 +440,7 @@ export function useWallpaperImagineController({
     try {
       const result =
         mode === "video"
-          ? await api.wallpaperImageToVideo(
+          ? await wallpaperApi.wallpaperImageToVideo(
               videoSourcePath!,
               trimmedPrompt,
               videoDuration,
@@ -446,8 +448,8 @@ export function useWallpaperImagineController({
               requestId!,
             )
           : mode === "edit"
-            ? await api.wallpaperImageEdit(videoSourcePath!, trimmedPrompt, aspect, requestId!)
-            : await api.wallpaperImagine(trimmedPrompt, aspect, requestId);
+            ? await wallpaperApi.wallpaperImageEdit(videoSourcePath!, trimmedPrompt, aspect, requestId!)
+            : await wallpaperApi.wallpaperImagine(trimmedPrompt, aspect, requestId);
       if (generation !== operationGenerationRef.current) return;
       if (
         requestId &&
@@ -567,7 +569,7 @@ export function useWallpaperImagineController({
     let lastCode: WallpaperSourceErrorCode | null = null;
     for (const recovery of requested) {
       try {
-        const result = await api.wallpaperImagineRecoverCatalog(
+        const result = await wallpaperApi.wallpaperImagineRecoverCatalog(
           recovery.recoveryId,
         );
         if (generation !== operationGenerationRef.current) return;

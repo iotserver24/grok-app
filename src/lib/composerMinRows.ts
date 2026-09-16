@@ -9,7 +9,7 @@
 
 export type ComposerMinRows = "2" | "3" | "5" | "8";
 
-export const COMPOSER_MIN_ROWS_STORAGE_KEY = "grok.composerMinRows";
+export const COMPOSER_MIN_ROWS_STORAGE_KEY = "supercharge.composerMinRows";
 export const DEFAULT_COMPOSER_MIN_ROWS: ComposerMinRows = "2";
 export const COMPOSER_MIN_ROWS_ATTR = "data-composer-min-rows";
 /** Optional window event after save/apply (detail = preference). */

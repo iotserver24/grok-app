@@ -377,7 +377,7 @@ impl SessionManager {
     /// even when leftover busy flags remain after a failed turn. Otherwise a 502
     /// (or similar) that left `deferred_prompt_complete` set would make every
     /// subsequent connect no-op as `state=Disconnected busy=true`, and the chat
-    /// could not send again (Remote IM still works because it uses one-shot `grok -p`).
+    /// could not send again (Remote IM still works because it uses one-shot `supercharge -p`).
     pub(super) fn should_preserve_live_process(s: &LiveSession) -> bool {
         connect_should_preserve_live_process(s.fsm.state(), Self::live_session_is_busy(s))
     }
@@ -1295,7 +1295,7 @@ impl SessionManager {
         if AcpClient::use_mock() {
             "mock_acp".into()
         } else {
-            "grok_agent_stdio".into()
+            "supercharge_agent_stdio".into()
         }
     }
 

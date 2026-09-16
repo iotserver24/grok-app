@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Grok",
+  "productName": "Supercharge",
   "version": "0.2.35",
-  "identifier": "com.grokapp.desktop",
+  "identifier": "com.supercharge.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev:ui",
     "devUrl": "http://localhost:1421",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Grok",
+        "title": "Supercharge",
         "visible": false,
         "create": false,
         "width": 1200,
@@ -80,12 +80,13 @@
     "fileAssociations": [
       {
         "ext": [
+          "superchargeskin",
           "grokskin"
         ],
-        "name": "Grok Skin Pack",
-        "description": "Grok appearance skin pack",
+        "name": "Supercharge Skin Pack",
+        "description": "Supercharge appearance skin pack (legacy .grokskin supported)",
         "role": "Editor",
-        "mimeType": "application/vnd.grok.skin"
+        "mimeType": "application/vnd.supercharge.skin"
       }
     ],
     "windows": {
@@ -128,7 +129,10 @@
     "deep-link": {
       "desktop": {
         "schemes": [
-          "grok"
+          "supercharge",
+          "supercharge-app",
+          "grok",
+          "grok-app"
         ]
       }
     }

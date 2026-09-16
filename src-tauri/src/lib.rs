@@ -1,4 +1,4 @@
-//! Grok App Host — real ACP default (`grok agent stdio`).
+//! Supercharge App Host — real ACP default (`grok agent stdio`).
 
 mod account;
 
@@ -227,13 +227,11 @@ mod video_poster;
 
 mod voice_auth;
 
-mod voice_host;
-
 mod voice_stt;
 
-mod voice_tools;
-
 mod wallpaper_catalog;
+// Legacy xAI wallpaper implementations remain compiled for now, but their Tauri
+// commands are intentionally not registered and no shipped UI reaches them.
 mod wallpaper_grok_album;
 mod wallpaper_imagine_video;
 mod wallpaper_library;
@@ -303,8 +301,6 @@ pub fn run() {
     let session_mgr = Arc::new(SessionManager::new());
 
     let mirror_host = Arc::new(MirrorHost::from_env());
-
-    let voice_host = Arc::new(voice_host::VoiceHost::new());
 
     let remote_im_state = Arc::new(remote_im::RemoteImState {
         inner: tokio::sync::Mutex::new(remote_im::BridgeRuntime::default()),
@@ -420,8 +416,6 @@ pub fn run() {
         .manage(session_mgr)
 
         .manage(mirror_host)
-
-        .manage(voice_host)
 
         .manage(remote_im_state)
 
@@ -917,7 +911,7 @@ pub fn run() {
 
                 mgr.start_stream_stall_watchdog(app.handle().clone());
 
-                // Prewarm competes with frontend probeCli (`grok --version`) if
+                // Prewarm competes with frontend probeCli (`supercharge --version`) if
                 // both spawn at t=0. Delay so first paint + gate probe win.
                 {
                     let mgr = Arc::clone(&mgr);
@@ -1047,7 +1041,7 @@ pub fn run() {
 
         .build(context)
 
-        .expect("error while building Grok App")
+        .expect("error while building Supercharge App")
 
         .run(|app, event| {
 

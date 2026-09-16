@@ -472,7 +472,7 @@ function normalizeOpenPath(path: string | null | undefined): string {
 }
 
 /** localStorage key shared by Settings + Open Location + Resource/Review. */
-export const OPEN_TARGET_STORAGE_KEY = "grok-app.openTarget";
+export const OPEN_TARGET_STORAGE_KEY = "supercharge-app.openTarget";
 
 /** Normalize open-target id (`Finder` → `finder`). Empty → `finder`. */
 export function normalizeOpenTargetId(

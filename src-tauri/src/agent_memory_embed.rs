@@ -1,4 +1,4 @@
-//! Memory embedding config — allowlisted read/write of Grok Build 0.2.117
+//! Memory embedding config — allowlisted read/write of Supercharge 0.2.117
 //! `[memory.*]` keys in the active `GROK_HOME` `config.toml`.
 //!
 //! ## Allowlist (soft-fail when missing)

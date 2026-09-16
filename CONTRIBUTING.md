@@ -1,77 +1,50 @@
-# Contributing to Grok App
-
-感谢关注 **Grok App**！欢迎 Issue、PR 与使用反馈。
+# Contributing to Supercharge App
 
 Thanks for your interest in contributing.
 
-## 开发环境 / Development
+## Development
 
-**Package manager:** root app is **pnpm only** (`pnpm-lock.yaml`). Do **not** run `npm install` / `yarn` at the repo root — that regenerates a stale `package-lock.json` and can reintroduce old CVEs (e.g. xlsx). `remote-bridge/` may use npm on its own.
+The root application uses pnpm. Do not run `npm install` or Yarn at the repository root because that creates a competing lockfile. The legacy `remote-bridge/` package is separate and is not part of the normal desktop build.
 
 ```bash
-pnpm install
-pnpm dev          # Tauri + Vite; identifier com.grokapp.desktop.dev (beside installed Grok)
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-Windows: to run already-merged `origin/main` beside the official **Grok** install, double-click [`install-latest.cmd`](./install-latest.cmd) (see [docs/BUILD.md](./docs/BUILD.md)).
-
-Frontend only:
+Frontend-only preview:
 
 ```bash
 pnpm dev:ui
 ```
 
-Checks:
+Run the checks before submitting changes:
 
 ```bash
-pnpm deps:check   # root lockfile hygiene (no package-lock.json)
-pnpm audit:prod   # production CVEs (moderate+)
+pnpm deps:check
+pnpm audit:prod
 pnpm typecheck
+pnpm lint
 pnpm test
 pnpm build:ui
-cd src-tauri && cargo test
+cd src-tauri
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test
 ```
 
-Optional mock agent (no real CLI):
+For a local agent, install the Supercharge CLI and make `supercharge` available on `PATH`, or set `SUPERCHARGE_BIN`. Shared sessions use `SUPERCHARGE_HOME` or `~/.supercharge`.
 
-```bash
-GROK_APP_ACP=mock pnpm dev
-```
+## Guidelines
 
-Default is the real **Grok Build** CLI (`grok agent stdio`).
+- Product name: **Supercharge App**; installed bundle name: **Supercharge**.
+- Preserve the desktop-to-agent boundary: the app is an ACP client and must not duplicate the CLI’s model/tool loop.
+- Keep all user-facing text in `src/i18n/`; all locale catalogs must retain the same key set.
+- Do not add new feature state or large blocks to `src/App.tsx` or `src/app/AppWorkbench.tsx`; use domain hooks, providers, components, and library modules.
+- Do not use browser-native confirm, prompt, select, or context menus for product interactions; reuse existing application components.
+- Do not commit `node_modules`, `target`, `dist`, authentication files, app data, API keys, or `secrets.json`.
+- Preserve compatibility readers for legacy Grok App data until a deliberate migration release removes them.
+- Keep [LICENSE](LICENSE) and [NOTICE-UPSTREAM.md](NOTICE-UPSTREAM.md) intact.
 
-## 贡献流程 / Workflow
+## Pull requests
 
-1. Fork 本仓库并创建分支
-2. 做尽量小而清晰的改动
-3. 本地通过 `pnpm typecheck`、`pnpm test`、`pnpm lint`、`pnpm build:ui`，以及 `cd src-tauri && cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test`
-4. 用户可见文案走 `src/i18n/messages.ts`（`en` / `zh` 同键）
-5. 禁止在 UI 使用 `window.confirm` / `prompt` / `alert`（见 `docs/llm-wiki/dialogs.md`）
-6. 提交 PR，说明动机、改动与验证方式
-
-**维护者 / AI 协作者**：Issue 分拣、PR 采纳标准、社区反馈入库与发版闭环见 **[docs/llm-wiki/maintain.md](./docs/llm-wiki/maintain.md)**。  
-发版时贡献者圆形头像画廊由 `scripts/update-contributors.py` 写入 README（规则见 **[docs/llm-wiki/release.md](./docs/llm-wiki/release.md)**），请勿手写第二套表格。
-
-## 约定 / Guidelines
-
-- 产品名：**Grok App**（窗口 / 安装包名多为 **Grok**）
-- 会话与设置数据在 App data root（可用 `GROK_APP_HOME` 覆盖）
-- Agent 产品规则以 [`docs/llm-wiki/`](./docs/llm-wiki/) 为准
-- 不要提交 `node_modules`、`target`、`dist`、本地 token / `secrets.json` / `auth.json`
-- 安全相关问题请走 [SECURITY.md](./SECURITY.md)
-
-## 交流 / Contact
-
-- X: [@cgnot996](https://x.com/cgnot996)
-- GitHub Issues: https://github.com/RongleCat/grok-app/issues
-
-## Releases
-
-Full process for humans and AI maintainers: **[docs/llm-wiki/release.md](./docs/llm-wiki/release.md)**.
-
-1. Write bilingual notes under `## [X.Y.Z] - YYYY-MM-DD` in `CHANGELOG.md`. The in-app What's New popup shows **only the first sentence** of each bullet — keep that sentence to one short line (added / fixed / improved). CHANGELOG may add at most one extra sentence. Do not rewrite already-shipped version sections. See `docs/llm-wiki/release.md`.
-2. Commit on a clean `main`.
-3. Run `./scripts/release-tag.sh X.Y.Z` (optionally `--push`).
-4. CI builds **macOS ARM + Intel + Windows + Linux** and sets the **GitHub Release body** from that CHANGELOG section via `scripts/changelog-for-release.py` (changes only; install notes stay in README).
-
-Do not tag without a matching CHANGELOG section — the release job will fail.
+Keep changes focused, explain user-visible behavior and validation, and include tests for protocol, migration, persistence, and settings changes. Do not tag or publish a release without explicit maintainer approval.

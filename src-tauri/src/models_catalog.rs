@@ -1,34 +1,49 @@
-//! Live **model** catalog from Grok CLI cache only.
+//! Supercharge model catalog from the CLI cache plus live ACP initialization.
 //!
-//! Providers / relays are **channels** managed on the Providers settings page —
-//! they must never appear as selectable model chips.
+//! Providers / relays are channels managed on the Providers settings page and
+//! do not appear as selectable model chips unless the Supercharge runtime
+//! advertises their models through ACP.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
 
 use serde::{Deserialize, Serialize};
 
-use crate::paths::resolve_agent_grok_home;
-use crate::store;
-
-/// Live per-model context windows reported by the agent during `initialize`
-/// (ClaudeCode `_meta.modelState.availableModels[].totalContextTokens`).
-/// Merged on top of cache-derived windows at read time. Grok CLI does not
-/// populate this yet (soft-fail → empty).
-static LIVE_CONTEXT_WINDOWS: LazyLock<Mutex<BTreeMap<String, u64>>> =
+/// Live model catalog reported by the active agent during `initialize`.
+/// Once populated it replaces, rather than augments, the cold-start cache.
+static LIVE_MODELS: LazyLock<Mutex<BTreeMap<String, AvailableModel>>> =
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
+static LIVE_DEFAULT_MODEL_ID: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
+static LIVE_MODEL_STATE_SEEN: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
 
-/// Merge live context windows discovered during `initialize`.
-/// Called from `acp_client` after the handshake. Idempotent; latest wins.
-pub fn merge_live_context_windows(windows: HashMap<String, u64>) {
-    let mut guard = LIVE_CONTEXT_WINDOWS
+/// Store the latest complete live model snapshot discovered during `initialize`.
+/// Replacing the map is important: unioning snapshots would keep models that the
+/// active provider no longer advertises.
+pub fn merge_live_models(models: Vec<AvailableModel>, current_model_id: Option<String>) {
+    let next = models
+        .into_iter()
+        .filter(|model| !model.id.trim().is_empty())
+        .map(|mut model| {
+            model.id = model.id.trim().to_string();
+            model.label = model.label.trim().to_string();
+            if model.label.is_empty() {
+                model.label = model.id.clone();
+            }
+            model.source = "live".into();
+            (model.id.clone(), model)
+        })
+        .collect();
+    *LIVE_MODELS.lock().expect("LIVE_MODELS poisoned") = next;
+    *LIVE_MODEL_STATE_SEEN
         .lock()
-        .expect("LIVE_CONTEXT_WINDOWS poisoned");
-    for (id, tokens) in windows {
-        guard.insert(id, tokens);
-    }
+        .expect("LIVE_MODEL_STATE_SEEN poisoned") = true;
+    *LIVE_DEFAULT_MODEL_ID
+        .lock()
+        .expect("LIVE_DEFAULT_MODEL_ID poisoned") = current_model_id
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty());
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -43,20 +58,19 @@ pub struct ReasoningEffort {
     pub is_default: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AvailableModel {
     pub id: String,
     pub label: String,
-    /// Always "official" for catalog entries (providers are not models).
+    /// Catalog provenance (`live` or `cache`; DTO kept stable for the frontend).
     pub source: String,
     #[serde(default)]
     pub is_default: bool,
     /// Per-model reasoning efforts from CLI `info.reasoning_efforts` (may be empty).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reasoning_efforts: Vec<ReasoningEffort>,
-    /// Model context window in tokens (live-merged from `initialize` first,
-    /// then cache `info.totalContextTokens` / `info.context_window`).
+    /// Model context window in tokens from live ACP, or the cold-start cache.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_window: Option<u64>,
 }
@@ -76,89 +90,67 @@ struct ParsedCacheModel {
     context_window: Option<u64>,
 }
 
-fn user_grok_home() -> PathBuf {
-    crate::process_util::user_home().join(".grok")
+fn user_supercharge_home() -> PathBuf {
+    crate::process_util::user_home().join(".supercharge")
 }
 
-/// Newest official catalog id used as the empty-cache / preferred default.
-pub const OFFICIAL_FALLBACK_MODEL_ID: &str = "grok-4.6";
-const OFFICIAL_FALLBACK_MODEL_LABEL: &str = "Grok 4.6";
-const OFFICIAL_PREFERRED_IDS: &[&str] = &["grok-4.6", "grok-4.5"];
-
-fn official_fallback_efforts() -> Vec<ReasoningEffort> {
-    vec![
-        ReasoningEffort {
-            id: "low".into(),
-            value: "low".into(),
-            label: "Low Effort".into(),
-            description: "Quick, fast implementations".into(),
-            is_default: false,
-        },
-        ReasoningEffort {
-            id: "medium".into(),
-            value: "medium".into(),
-            label: "Medium Effort".into(),
-            description: "Balanced effort with standard implementation and testing".into(),
-            is_default: false,
-        },
-        ReasoningEffort {
-            id: "high".into(),
-            value: "high".into(),
-            label: "High Effort".into(),
-            description: "Higher implementation quality with extensive reasoning".into(),
-            is_default: false,
-        },
-        ReasoningEffort {
-            id: "xhigh".into(),
-            value: "xhigh".into(),
-            label: "Extra High Effort".into(),
-            description: "Highest effort and reasoning level".into(),
-            is_default: true,
-        },
-    ]
-}
-
-/// CLI grok-4.6 cache marks both `xhigh` and `high` as default. Product
-/// default on 4.6 is **xhigh**.
-fn normalize_effort_defaults(efforts: &mut [ReasoningEffort]) {
-    let default_count = efforts.iter().filter(|e| e.is_default).count();
-    if default_count <= 1 {
-        return;
-    }
-    if efforts.iter().any(|e| e.id.eq_ignore_ascii_case("xhigh")) {
-        for e in efforts.iter_mut() {
-            e.is_default = e.id.eq_ignore_ascii_case("xhigh");
+fn configured_default_model(home: &std::path::Path) -> Option<String> {
+    let raw = fs::read_to_string(home.join("config.toml")).ok()?;
+    let mut in_models = false;
+    for line in raw.lines() {
+        let line = line.trim();
+        if let Some((is_array, table)) = crate::agent_home_config::parse_table_header(line) {
+            in_models = !is_array && table == "models";
+            continue;
         }
-        return;
+        if !in_models || line.starts_with('#') {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if key.trim() != "default" {
+            continue;
+        }
+        let value = value
+            .split_once('#')
+            .map_or(value, |(before_comment, _)| before_comment)
+            .trim()
+            .trim_matches(['\"', '\''])
+            .trim();
+        if !value.is_empty() {
+            return Some(value.to_string());
+        }
     }
-    if !efforts.iter().any(|e| e.id.eq_ignore_ascii_case("high")) {
-        return;
-    }
-    for e in efforts.iter_mut() {
-        e.is_default = e.id.eq_ignore_ascii_case("high");
+    None
+}
+
+/// Keep the first catalog-declared default when malformed input marks more
+/// than one effort. Do not encode model-family-specific priorities here.
+fn normalize_effort_defaults(efforts: &mut [ReasoningEffort]) {
+    let mut saw_default = false;
+    for effort in efforts {
+        if !effort.is_default {
+            continue;
+        }
+        if saw_default {
+            effort.is_default = false;
+        } else {
+            saw_default = true;
+        }
     }
 }
 
-fn preferred_official_model_id(
+fn preferred_model_id(
     by_id: &BTreeMap<String, AvailableModel>,
-    settings_model: Option<&str>,
+    configured_model: Option<&str>,
 ) -> String {
-    if let Some(id) = settings_model.map(str::trim).filter(|s| !s.is_empty()) {
-        // Official cache never contains custom provider route ids.
+    if let Some(id) = configured_model.map(str::trim).filter(|s| !s.is_empty()) {
         if by_id.contains_key(id) {
             return id.to_string();
         }
     }
-    for id in OFFICIAL_PREFERRED_IDS {
-        if by_id.contains_key(*id) {
-            return (*id).to_string();
-        }
-    }
-    by_id
-        .keys()
-        .next()
-        .cloned()
-        .unwrap_or_else(|| OFFICIAL_FALLBACK_MODEL_ID.into())
+    by_id.keys().next().cloned().unwrap_or_default()
 }
 
 /// Parse `/info/reasoning_efforts` from a models_cache entry body.
@@ -236,9 +228,6 @@ fn read_models_cache(
         if hidden {
             continue;
         }
-        // Skip entries that look like provider routes (have a custom base_url override
-        // without being the official chat-proxy catalog shape). Official cache entries
-        // expose info.model / info.name from cli-chat-proxy.
         let label = body
             .pointer("/info/name")
             .and_then(|x| x.as_str())
@@ -252,6 +241,11 @@ fn read_models_cache(
             .or_else(|| {
                 body.pointer("/info/context_window")
                     .and_then(|v| v.as_u64())
+            })
+            .or_else(|| {
+                body.pointer("/info/context_window")
+                    .and_then(|v| v.as_str())
+                    .and_then(|v| v.parse::<u64>().ok())
             });
         map.insert(
             id.clone(),
@@ -273,91 +267,82 @@ fn read_models_cache(
     Some((map, origin, fetched_at))
 }
 
-/// Models the user can select in the composer.
-///
-/// **Only** official Grok Build catalog IDs from `models_cache.json`.
-/// Custom providers (`[model.*]` in config.toml) are channels — switch them under
-/// Settings → Account → Providers, not here.
-pub fn list_available_models() -> AvailableModelsResult {
-    let settings = store::load_settings();
-    let agent_home = resolve_agent_grok_home(&settings.session_data_mode);
-
-    let mut by_id: BTreeMap<String, AvailableModel> = BTreeMap::new();
-    let mut origin = None;
-    let mut fetched_at = None;
-
-    // Prefer agent-home cache (GROK_HOME for independent mode), then ~/.grok.
-    // Do NOT merge agent config.toml [model.*] provider routes into this list.
-    for cache in [
-        agent_home.join("models_cache.json"),
-        user_grok_home().join("models_cache.json"),
-    ] {
-        if let Some((map, o, f)) = read_models_cache(&cache) {
-            if origin.is_none() {
-                origin = o;
-            }
-            if fetched_at.is_none() {
-                fetched_at = f;
-            }
-            for (id, parsed) in map {
-                by_id.entry(id.clone()).or_insert(AvailableModel {
+fn cache_result(home: &std::path::Path) -> Option<AvailableModelsResult> {
+    let cache = home.join("models_cache.json");
+    let (map, origin, fetched_at) = read_models_cache(&cache)?;
+    if map.is_empty() {
+        return None;
+    }
+    let by_id: BTreeMap<String, AvailableModel> = map
+        .into_iter()
+        .map(|(id, parsed)| {
+            (
+                id.clone(),
+                AvailableModel {
                     id,
                     label: parsed.label,
-                    source: "official".into(),
+                    source: "cache".into(),
                     is_default: false,
                     reasoning_efforts: parsed.reasoning_efforts,
                     context_window: parsed.context_window,
-                });
-            }
-            if !by_id.is_empty() {
-                break;
-            }
-        }
-    }
-
-    // Hard fallback — known-good official default when cache is empty / offline.
-    if by_id.is_empty() {
-        by_id.insert(
-            OFFICIAL_FALLBACK_MODEL_ID.into(),
-            AvailableModel {
-                id: OFFICIAL_FALLBACK_MODEL_ID.into(),
-                label: OFFICIAL_FALLBACK_MODEL_LABEL.into(),
-                source: "official".into(),
-                is_default: true,
-                reasoning_efforts: official_fallback_efforts(),
-                context_window: Some(500_000),
-            },
-        );
-    }
-
-    // Overlay live windows discovered during `initialize` (ClaudeCode).
-    // Live values win over cache-derived windows; absent entries stay as-is.
-    {
-        let live = LIVE_CONTEXT_WINDOWS
-            .lock()
-            .expect("LIVE_CONTEXT_WINDOWS poisoned");
-        for (id, tokens) in live.iter() {
-            if let Some(m) = by_id.get_mut(id) {
-                m.context_window = Some(*tokens);
-            }
-        }
-    }
-
-    // Prefer a saved official catalog id; ignore stale provider route ids
-    // (e.g. "yunyi"). Otherwise newest official present (4.6 > 4.5).
-    let preferred = preferred_official_model_id(&by_id, settings.model_id.as_deref());
-
+                },
+            )
+        })
+        .collect();
+    let configured_default = configured_default_model(home);
+    let preferred = preferred_model_id(&by_id, configured_default.as_deref());
     let mut models: Vec<AvailableModel> = by_id.into_values().collect();
     models.sort_by(|a, b| a.id.cmp(&b.id));
-    for m in &mut models {
-        m.is_default = m.id == preferred;
+    for model in &mut models {
+        model.is_default = model.id == preferred;
     }
-
-    AvailableModelsResult {
+    Some(AvailableModelsResult {
         models,
         default_model_id: preferred,
         origin,
         fetched_at,
+    })
+}
+
+/// Models the user can select in the composer.
+///
+/// Live ACP `_meta.modelState` is the complete authoritative snapshot. Before
+/// an ACP handshake succeeds, use only `~/.supercharge/models_cache.json` plus
+/// `[models].default` from the matching `config.toml`.
+pub fn list_available_models() -> AvailableModelsResult {
+    let live = LIVE_MODELS.lock().expect("LIVE_MODELS poisoned").clone();
+    let live_seen = *LIVE_MODEL_STATE_SEEN
+        .lock()
+        .expect("LIVE_MODEL_STATE_SEEN poisoned");
+    if live_seen {
+        let live_default = LIVE_DEFAULT_MODEL_ID
+            .lock()
+            .expect("LIVE_DEFAULT_MODEL_ID poisoned")
+            .clone();
+        let preferred = preferred_model_id(&live, live_default.as_deref());
+        let mut models: Vec<AvailableModel> = live.into_values().collect();
+        models.sort_by(|a, b| a.id.cmp(&b.id));
+        for model in &mut models {
+            model.is_default = model.id == preferred;
+        }
+        return AvailableModelsResult {
+            models,
+            default_model_id: preferred,
+            origin: Some("acp".into()),
+            fetched_at: None,
+        };
+    }
+
+    let home = user_supercharge_home();
+    if let Some(result) = cache_result(&home) {
+        return result;
+    }
+
+    AvailableModelsResult {
+        models: Vec::new(),
+        default_model_id: String::new(),
+        origin: None,
+        fetched_at: None,
     }
 }
 
@@ -365,16 +350,111 @@ pub fn list_available_models() -> AvailableModelsResult {
 mod tests {
     use super::*;
 
+    fn unique_temp_dir(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "supercharge-models-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
     #[test]
-    fn read_cache_parses_official_entry() {
-        let dir = std::env::temp_dir().join(format!("grok-app-models-test-{}", std::process::id()));
+    fn configured_default_reads_only_models_default() {
+        let dir = unique_temp_dir("configured-default");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("config.toml"),
+            r#"default = "wrong-root"
+
+[model.demo]
+default = "wrong-model"
+
+[models] # active catalog
+default_model = "wrong-key"
+default = "configured-model"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            configured_default_model(&dir).as_deref(),
+            Some("configured-model")
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cache_result_uses_configured_default_and_preserves_all_models() {
+        let dir = unique_temp_dir("cold-start");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("models_cache.json"),
+            r#"{
+              "origin": "https://provider.example/v1/models",
+              "models": {
+                "alpha": { "info": { "name": "Alpha", "context_window": "131072" } },
+                "beta": { "info": { "name": "Beta", "context_window": 262144 } }
+              }
+            }"#,
+        )
+        .unwrap();
+        fs::write(dir.join("config.toml"), "[models]\ndefault = 'beta'\n").unwrap();
+
+        let result = cache_result(&dir).expect("cache result");
+        assert_eq!(result.default_model_id, "beta");
+        assert_eq!(result.models.len(), 2);
+        assert_eq!(result.models[0].source, "cache");
+        assert_eq!(result.models[0].context_window, Some(131_072));
+        assert!(result.models[1].is_default);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn live_snapshot_replaces_stale_entries_and_default() {
+        let stale = AvailableModel {
+            id: "stale".into(),
+            label: "Stale".into(),
+            source: "live".into(),
+            is_default: true,
+            reasoning_efforts: Vec::new(),
+            context_window: Some(1),
+        };
+        merge_live_models(vec![stale], Some("stale".into()));
+        let fresh = AvailableModel {
+            id: "fresh".into(),
+            label: "Fresh model".into(),
+            source: "ignored".into(),
+            is_default: false,
+            reasoning_efforts: Vec::new(),
+            context_window: Some(262_144),
+        };
+        merge_live_models(vec![fresh], Some("fresh".into()));
+
+        let live = LIVE_MODELS.lock().expect("not poisoned");
+        assert!(!live.contains_key("stale"));
+        assert_eq!(live.get("fresh").map(|m| m.source.as_str()), Some("live"));
+        drop(live);
+        assert_eq!(
+            LIVE_DEFAULT_MODEL_ID
+                .lock()
+                .expect("not poisoned")
+                .as_deref(),
+            Some("fresh")
+        );
+    }
+
+    #[test]
+    fn read_cache_parses_model_entry() {
+        let dir = unique_temp_dir("cache-entry");
         let _ = fs::create_dir_all(&dir);
         let path = dir.join("models_cache.json");
         fs::write(
             &path,
             r#"{
               "fetched_at": "2026-07-23T00:00:00Z",
-              "origin": "https://cli-chat-proxy.grok.com/v1/models",
+              "origin": "https://provider.example/v1/models",
               "models": {
                 "grok-4.5": {
                   "info": { "id": "grok-4.5", "name": "Grok 4.5", "hidden": false }
@@ -392,7 +472,10 @@ mod tests {
             .get("grok-4.5")
             .map(|m| m.reasoning_efforts.is_empty())
             .unwrap_or(false));
-        assert!(origin.unwrap().contains("cli-chat-proxy"));
+        assert_eq!(
+            origin.as_deref(),
+            Some("https://provider.example/v1/models")
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -440,21 +523,21 @@ mod tests {
     }
 
     #[test]
-    fn parse_reasoning_efforts_collapses_dual_default_to_xhigh() {
+    fn parse_reasoning_efforts_keeps_first_declared_default() {
         let body: serde_json::Value = serde_json::from_str(
             r#"{
               "info": {
                 "reasoning_efforts": [
                   {
-                    "id": "xhigh",
-                    "value": "xhigh",
-                    "label": "Extra High Effort",
-                    "default": true
-                  },
-                  {
                     "id": "high",
                     "value": "high",
                     "label": "High Effort",
+                    "default": true
+                  },
+                  {
+                    "id": "xhigh",
+                    "value": "xhigh",
+                    "label": "Extra High Effort",
                     "default": true
                   },
                   {
@@ -470,9 +553,9 @@ mod tests {
         .unwrap();
         let efforts = parse_reasoning_efforts(&body);
         assert_eq!(efforts.len(), 3);
-        assert_eq!(efforts[0].id, "xhigh");
+        assert_eq!(efforts[0].id, "high");
         assert!(efforts[0].is_default);
-        assert_eq!(efforts[1].id, "high");
+        assert_eq!(efforts[1].id, "xhigh");
         assert!(!efforts[1].is_default);
         assert!(!efforts[2].is_default);
     }
@@ -499,15 +582,14 @@ mod tests {
 
     #[test]
     fn read_cache_includes_reasoning_efforts() {
-        let dir =
-            std::env::temp_dir().join(format!("grok-app-models-efforts-{}", std::process::id()));
+        let dir = unique_temp_dir("efforts");
         let _ = fs::create_dir_all(&dir);
         let path = dir.join("models_cache.json");
         fs::write(
             &path,
             r#"{
               "fetched_at": "2026-07-25T00:00:00Z",
-              "origin": "https://cli-chat-proxy.grok.com/v1/models",
+              "origin": "https://provider.example/v1/models",
               "models": {
                 "grok-4.5": {
                   "info": {
@@ -539,14 +621,7 @@ mod tests {
 
     #[test]
     fn read_cache_parses_context_window_total_tokens() {
-        let dir = std::env::temp_dir().join(format!(
-            "grok-app-models-cw-total-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
+        let dir = unique_temp_dir("context-window");
         let _ = fs::create_dir_all(&dir);
         let path = dir.join("models_cache.json");
         fs::write(
@@ -577,24 +652,5 @@ mod tests {
         );
         assert_eq!(map.get("grok-mini").and_then(|m| m.context_window), None);
         let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn merge_live_context_windows_inserts_without_panic() {
-        // Use a unique id to avoid interfering with other tests / list_available_models.
-        let unique = format!(
-            "test-merge-live-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        );
-        let mut windows = HashMap::new();
-        windows.insert(unique.clone(), 999999);
-        merge_live_context_windows(windows);
-
-        let guard = LIVE_CONTEXT_WINDOWS.lock().expect("not poisoned");
-        assert_eq!(guard.get(&unique), Some(&999999));
     }
 }

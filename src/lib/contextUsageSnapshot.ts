@@ -26,7 +26,7 @@ import {
 // context size) and restore it on hydrate so history sessions show real usage.
 // Compact markers still win: they carry authoritative post-compact snapshots.
 
-const SESSION_USAGE_SNAPSHOT_KEY = "grok.sessionUsageSnapshots";
+const SESSION_USAGE_SNAPSHOT_KEY = "supercharge.sessionUsageSnapshots";
 const SESSION_USAGE_SNAPSHOT_MAX = 200;
 
 export type SessionUsageSnapshot = {

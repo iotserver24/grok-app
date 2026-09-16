@@ -7,7 +7,7 @@
 import { isTauri } from "./api/host";
 import { openExternalUrl } from "./api/system";
 
-export const CONFIRM_EXTERNAL_LINKS_STORAGE_KEY = "grok.confirmExternalLinks";
+export const CONFIRM_EXTERNAL_LINKS_STORAGE_KEY = "supercharge.confirmExternalLinks";
 
 /** Fired on `window` after a successful save (detail = boolean confirm). */
 export const CONFIRM_EXTERNAL_LINKS_CHANGE_EVENT =

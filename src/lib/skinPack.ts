@@ -1,5 +1,5 @@
 /**
- * Appearance skin pack (`.grokskin`) — types, manifest validation, export helpers.
+ * Appearance skin pack (`.superchargeskin`; legacy `.grokskin` imports supported) — types, manifest validation, export helpers.
  *
  * Host ZIP inspect is authoritative for on-disk packs. This module is the
  * shared field contract used by export, preview, and Apply orchestration.
@@ -32,8 +32,10 @@ import { parseWallpaperClip } from "./wallpaperClip";
 import type { ThemePreference } from "./theme";
 
 export const SKIN_PACK_SCHEMA_VERSION = 1;
-export const SKIN_PACK_EXT = "grokskin";
-export const SKIN_PACK_ZIP_COMMENT = "GROKSKIN/1";
+export const SKIN_PACK_EXT = "superchargeskin";
+export const SKIN_PACK_ZIP_COMMENT = "SUPERCHARGESKIN/1";
+export const LEGACY_SKIN_PACK_EXT = "grokskin";
+export const LEGACY_SKIN_PACK_ZIP_COMMENT = "GROKSKIN/1";
 export const SKIN_PACK_NAME_MAX = 80;
 export const SKIN_PACK_DESC_MAX = 500;
 export const SKIN_PACK_AUTHOR_MAX = 80;

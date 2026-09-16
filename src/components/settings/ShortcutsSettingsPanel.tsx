@@ -47,12 +47,7 @@ import {
   loadComposerSendKeyPref,
   type ComposerSendKeyPref,
 } from "@/lib/composerSendKey";
-import {
-  SHORTCUT_KEYS_OFF,
-  VOICE_HOTKEY_CHANGED_EVENT,
-  VOICE_HOTKEY_STORAGE_KEY,
-  loadVoiceHotkeyEnabled,
-} from "@/lib/voiceHotkeyPref";
+import { SHORTCUT_KEYS_OFF } from "@/lib/voiceHotkeyPref";
 import type { MessageKey, Vars } from "@/i18n";
 import { UiCheck } from "./shared";
 
@@ -71,9 +66,6 @@ export function ShortcutsSettingsPanel({
   );
   const [remaps, setRemaps] = useState<ShortcutRemapMap>(() =>
     loadShortcutRemaps(),
-  );
-  const [voiceHotkeyEnabled, setVoiceHotkeyEnabled] = useState(() =>
-    loadVoiceHotkeyEnabled(),
   );
   const [ignoreCrossScope, setIgnoreCrossScope] = useState(() =>
     loadIgnoreCrossScopeConflicts(),
@@ -94,24 +86,18 @@ export function ShortcutsSettingsPanel({
   useEffect(() => {
     const reloadSend = () => setSendPref(loadComposerSendKeyPref());
     const reloadRemaps = () => setRemaps(loadShortcutRemaps());
-    const reloadVoiceHotkey = () =>
-      setVoiceHotkeyEnabled(loadVoiceHotkeyEnabled());
     const reloadIgnoreCross = () =>
       setIgnoreCrossScope(loadIgnoreCrossScopeConflicts());
     window.addEventListener(COMPOSER_SEND_KEY_CHANGED_EVENT, reloadSend);
     window.addEventListener(SHORTCUT_REMAP_CHANGED_EVENT, reloadRemaps);
-    window.addEventListener(VOICE_HOTKEY_CHANGED_EVENT, reloadVoiceHotkey);
     window.addEventListener(
       SHORTCUT_IGNORE_CROSS_SCOPE_CHANGED_EVENT,
       reloadIgnoreCross,
     );
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "grok.composerSendKey" || e.key === null) reloadSend();
+      if (e.key === "supercharge.composerSendKey" || e.key === null) reloadSend();
       if (e.key === SHORTCUT_REMAP_STORAGE_KEY || e.key === null) {
         reloadRemaps();
-      }
-      if (e.key === VOICE_HOTKEY_STORAGE_KEY || e.key === null) {
-        reloadVoiceHotkey();
       }
       if (
         e.key === SHORTCUT_IGNORE_CROSS_SCOPE_STORAGE_KEY ||
@@ -124,7 +110,6 @@ export function ShortcutsSettingsPanel({
     return () => {
       window.removeEventListener(COMPOSER_SEND_KEY_CHANGED_EVENT, reloadSend);
       window.removeEventListener(SHORTCUT_REMAP_CHANGED_EVENT, reloadRemaps);
-      window.removeEventListener(VOICE_HOTKEY_CHANGED_EVENT, reloadVoiceHotkey);
       window.removeEventListener(
         SHORTCUT_IGNORE_CROSS_SCOPE_CHANGED_EVENT,
         reloadIgnoreCross,
@@ -185,8 +170,8 @@ export function ShortcutsSettingsPanel({
   }, [recordingId, remaps, t, conflictOpts]);
 
   const groups = useMemo(
-    () => shortcutsByGroup(sendPref, remaps, voiceHotkeyEnabled),
-    [sendPref, remaps, voiceHotkeyEnabled],
+    () => shortcutsByGroup(sendPref, remaps),
+    [sendPref, remaps],
   );
   const filteredGroups = useMemo(
     () =>

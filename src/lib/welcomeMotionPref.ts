@@ -1,5 +1,5 @@
 /** Settings → Appearance → Interface: animate the empty new-chat welcome. */
-export const WELCOME_MOTION_STORAGE_KEY = "grok.welcomeMotion";
+export const WELCOME_MOTION_STORAGE_KEY = "supercharge.welcomeMotion";
 export const WELCOME_MOTION_CHANGE_EVENT = "grok-welcome-motion-change";
 export const DEFAULT_WELCOME_MOTION = true;
 

@@ -34,7 +34,6 @@ describe("builtinSlashItems", () => {
       "tutorial",
       "new",
       "automations",
-      "live-voice",
       "settings",
       "pet",
       "export",
@@ -45,6 +44,8 @@ describe("builtinSlashItems", () => {
       "extensions",
       "yolo",
     ]);
+
+    expect(names).not.toContain("live-voice");
 
     const goal = items.find((i) => i.name === "goal")!;
     expect(goal.kind).toBe("mode");
@@ -195,25 +196,6 @@ describe("skillsToSlashItems", () => {
     expect(items).toHaveLength(1);
     expect(items[0]!.source).toBe("project");
     expect(items[0]!.displayDescription).toBe("project copy");
-  });
-
-  it("localizes imagine skill and pins it first", () => {
-    const items = skillsToSlashItems([
-      { name: "other", description: "misc" },
-      {
-        name: "imagine",
-        description: "How to use image_gen",
-        source: "bundled",
-      },
-    ]);
-    expect(items.map((i) => i.name)).toEqual(["imagine", "other"]);
-    expect(items[0]).toMatchObject({
-      id: "skill:imagine",
-      kind: "skill",
-      name: "imagine",
-      titleKey: "skill.imagine",
-      descriptionKey: "skill.imagineDesc",
-    });
   });
 });
 

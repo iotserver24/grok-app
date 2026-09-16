@@ -69,9 +69,8 @@ pub struct CustomProvider {
     pub name: String,
     pub has_api_key: bool,
     pub api_backend: String,
-    /// `generic` writes a normal `[model.<id>]` relay. `grok_build_proxy`
-    /// exposes the relay as Grok Build's native model catalog / chat proxy so
-    /// the CLI can discover server-side capabilities from `/models`.
+    /// Compatibility field retained for the frontend DTO. Supercharge treats
+    /// configured providers uniformly; legacy modes normalize to `generic`.
     #[serde(default = "default_provider_mode")]
     pub provider_mode: String,
     pub is_default: bool,
@@ -100,7 +99,7 @@ pub struct CustomProvider {
     /// name/model heuristics in `models_aux` to decide text-only vs vision.
     #[serde(default)]
     pub supports_vision: bool,
-    /// Extra HTTP headers written as Grok Build `extra_headers` (verbatim).
+    /// Extra HTTP headers written as Supercharge `extra_headers` (verbatim).
     #[serde(default)]
     pub extra_headers: Vec<ProviderHeaderEntry>,
 }
@@ -141,33 +140,32 @@ pub struct UpsertProviderInput {
     pub extra_headers: Option<Vec<ProviderHeaderEntry>>,
 }
 
-/// TOML field (ignored by Grok Build) storing JSON array of `{id,name}`.
+/// TOML field (ignored by Supercharge) storing JSON array of `{id,name}`.
 const APP_MODELS_KEY: &str = "app_models";
-/// TOML field (ignored by Grok Build) storing JSON array of `{id,name,isDefault}`.
+/// TOML field (ignored by Supercharge) storing JSON array of `{id,name,isDefault}`.
 const APP_EFFORTS_KEY: &str = "app_efforts";
-/// Grok Build capability gate for forwarding `--reasoning-effort` to inference.
+/// Supercharge capability gate for forwarding `--reasoning-effort` to inference.
 const SUPPORTS_REASONING_EFFORT_KEY: &str = "supports_reasoning_effort";
-/// TOML field (ignored by Grok Build): when true, do not auto-append `/v1` to base_url.
+/// TOML field (ignored by Supercharge): when true, do not auto-append `/v1` to base_url.
 const APP_BASE_URL_FULL_PATH_KEY: &str = "app_base_url_full_path";
-/// TOML field (ignored by Grok Build): extra rules appended to the system prompt.
+/// TOML field (ignored by Supercharge): extra rules appended to the system prompt.
 const APP_APPEND_PROMPT_KEY: &str = "app_append_prompt";
-/// TOML field (ignored by Grok Build): relay accepts multimodal image_url.
+/// TOML field (ignored by Supercharge): relay accepts multimodal image_url.
 const APP_SUPPORTS_VISION_KEY: &str = "app_supports_vision";
-/// TOML field (ignored by Grok Build): relay transport semantics selected in App.
+/// TOML field (ignored by Supercharge): relay transport semantics selected in App.
 const APP_PROVIDER_MODE_KEY: &str = "app_provider_mode";
 
 pub const PROVIDER_MODE_GENERIC: &str = "generic";
+/// Legacy wire value retained so older frontends can submit it. It no longer
+/// enables a separate runtime route.
 pub const PROVIDER_MODE_GROK_BUILD_PROXY: &str = "grok_build_proxy";
 
 fn default_provider_mode() -> String {
     PROVIDER_MODE_GENERIC.to_string()
 }
 
-pub fn normalize_provider_mode(raw: Option<&str>) -> String {
-    match raw.unwrap_or("").trim().to_ascii_lowercase().as_str() {
-        PROVIDER_MODE_GROK_BUILD_PROXY => PROVIDER_MODE_GROK_BUILD_PROXY.to_string(),
-        _ => PROVIDER_MODE_GENERIC.to_string(),
-    }
+pub fn normalize_provider_mode(_raw: Option<&str>) -> String {
+    PROVIDER_MODE_GENERIC.to_string()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -175,7 +173,8 @@ pub fn normalize_provider_mode(raw: Option<&str>) -> String {
 pub struct ProvidersListResult {
     pub providers: Vec<CustomProvider>,
     pub default_model: Option<String>,
-    /// `official` = built-in Grok OAuth / xAI path; `custom` = a config.toml model with base_url.
+    /// Stable DTO value: `custom` when `[models].default` names an App-managed
+    /// provider section; `official` otherwise (the live/catalog-managed route).
     pub active_source: String,
     /// When `active_source == "custom"`, the selected provider id.
     pub active_provider_id: Option<String>,
@@ -187,12 +186,10 @@ pub struct ProvidersListResult {
     pub switched_to_independent: bool,
 }
 
-/// Built-in model id used when routing back to official Grok Build / SuperGrok.
+/// Legacy compatibility constants used by auxiliary modules that have not yet
+/// moved to the live catalog. Active provider routing does not special-case them.
 pub const OFFICIAL_DEFAULT_MODEL: &str = "grok";
-
-/// Catalog model preferred for composer / official spawn when none is set.
 pub const OFFICIAL_CATALOG_MODEL: &str = "grok-4.6";
-/// Previous official catalog id — still a valid official aux / spawn target.
 pub const OFFICIAL_CATALOG_MODEL_LEGACY: &str = "grok-4.5";
 
 pub fn is_official_catalog_model(id: &str) -> bool {
@@ -203,7 +200,7 @@ pub fn is_official_catalog_model(id: &str) -> bool {
 /// Which inference channel the agent should use.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActiveRoute {
-    /// Built-in xAI / SuperGrok (OIDC via auth.json).
+    /// No App-managed provider section is selected; the CLI catalog owns routing.
     Official,
     /// OpenAI-compatible relay section id in config.toml (`[model.<id>]`).
     Custom { id: String },
@@ -256,8 +253,8 @@ pub struct RemoteModel {
     pub supports_video: Option<bool>,
 }
 
-/// Process-only native Grok Build relay binding. Deliberately not Debug or
-/// Serialize because it contains the provider key.
+/// Legacy process-only relay binding retained for ABI compatibility with
+/// existing spawn code. Active provider behavior no longer constructs it.
 pub struct GrokBuildProxySpawn {
     pub base_url: String,
     pub models_url: String,
@@ -266,38 +263,10 @@ pub struct GrokBuildProxySpawn {
 }
 
 pub fn validate_grok_build_proxy_models(
-    remote: &[RemoteModel],
-    selected: &[ProviderModelEntry],
+    _remote: &[RemoteModel],
+    _selected: &[ProviderModelEntry],
 ) -> Result<(), String> {
-    if selected.is_empty() {
-        return Err("grok_build_proxy requires at least one model".into());
-    }
-    let mut missing = Vec::new();
-    let mut unsupported = Vec::new();
-    for model in selected {
-        let id = model.id.trim();
-        if id.is_empty() {
-            continue;
-        }
-        match remote.iter().find(|m| m.id == id) {
-            None => missing.push(id.to_string()),
-            Some(m) if m.supports_backend_search != Some(true) => unsupported.push(id.to_string()),
-            Some(_) => {}
-        }
-    }
-    if !missing.is_empty() {
-        return Err(format!(
-            "grok_build_proxy models missing from live /models: {}",
-            missing.join(", ")
-        ));
-    }
-    if !unsupported.is_empty() {
-        return Err(format!(
-            "grok_build_proxy requires supports_backend_search=true for: {}",
-            unsupported.join(", ")
-        ));
-    }
-    Ok(())
+    Err("grok_build_proxy is no longer an active Supercharge provider mode".into())
 }
 
 /// Parsed `[model.*]` section (shared with relay stream proxy).
@@ -335,7 +304,7 @@ fn quote(v: &str) -> String {
     serde_json::to_string(v).unwrap_or_else(|_| format!("\"{v}\""))
 }
 
-/// `[model.*]` keys Grok Build expects as bare TOML integers (not strings).
+/// `[model.*]` keys Supercharge expects as bare TOML integers (not strings).
 ///
 /// Writing `context_window = "1000000"` makes CLI reject the field
 /// (`context_window invalid type: string`) and silently fall back to 200k.
@@ -435,7 +404,7 @@ pub fn ensure_model_integer_fields() -> Result<bool, String> {
     Ok(true)
 }
 
-/// Enable Grok Build's native effort forwarding for existing custom providers
+/// Enable Supercharge's native effort forwarding for existing custom providers
 /// that already expose effort choices in the App.
 fn ensure_reasoning_effort_support_fields() -> Result<bool, String> {
     let _ = ensure_agent_home()?;
@@ -534,7 +503,7 @@ pub fn supports_vision_from_fields(fields: &std::collections::HashMap<String, St
     parse_app_bool_field(fields.get(APP_SUPPORTS_VISION_KEY).map(|s| s.as_str()))
 }
 
-/// Grok Build joins `{base_url}/chat/completions` (or `/responses`).
+/// Supercharge joins `{base_url}/chat/completions` (or `/responses`).
 /// OpenAI-compatible relays almost always expect `…/v1` as the base.
 /// Without it, requests hit `https://host/chat/completions` (404/HTML) and the
 /// agent may retry for minutes with no user-visible progress.
@@ -550,7 +519,7 @@ pub fn normalize_openai_base_url(raw: &str, api_backend: &str, full_path: bool) 
     if full_path {
         return base;
     }
-    // Anthropic-style messages often use bare host or /v1 already; still prefer /v1.
+    // Messages endpoints often use a bare host or /v1 already; still prefer /v1.
     let lower = base.to_ascii_lowercase();
     let needs_v1 = matches!(
         api_backend,
@@ -817,6 +786,26 @@ fn get_models_default(text: &str) -> Option<String> {
     None
 }
 
+fn remove_models_default(text: &str) -> String {
+    let mut lines = Vec::new();
+    let mut in_models = false;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if crate::agent_home_config::parse_table_header(trimmed).is_some() {
+            in_models = is_models_table_header(trimmed);
+        }
+        if in_models && assignment_key_exact(trimmed) == Some("default") {
+            continue;
+        }
+        lines.push(line);
+    }
+    let mut out = lines.join("\n");
+    if text.ends_with('\n') {
+        out.push('\n');
+    }
+    out
+}
+
 fn set_models_default(text: &str, model_id: &str) -> String {
     let mut lines: Vec<String> = text.lines().map(|s| s.to_string()).collect();
     let mut in_models = false;
@@ -1047,10 +1036,15 @@ pub fn maybe_migrate_legacy_relay(
     let model = default_model
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .unwrap_or(OFFICIAL_CATALOG_MODEL);
+        .map(ToString::to_string)
+        .or_else(|| {
+            let default = crate::models_catalog::list_available_models().default_model_id;
+            (!default.is_empty()).then_some(default)
+        })
+        .ok_or_else(|| "no configured Supercharge model is available".to_string())?;
     let _ = upsert_custom_provider(UpsertProviderInput {
         id: "relay".into(),
-        model: model.into(),
+        model,
         base_url: base.into(),
         name: Some("Imported relay".into()),
         api_key: Some(key.into()),
@@ -1160,23 +1154,15 @@ fn set_models_u32_field(text: &str, key: &str, value: u32) -> String {
     }
 }
 
-/// `grok` is the official `[models].default` token. A custom `[model.grok]`
-/// section must not steal Official Use (#1214).
-pub fn is_reserved_custom_provider_id(id: &str) -> bool {
-    let t = id.trim().to_ascii_lowercase();
-    t == OFFICIAL_DEFAULT_MODEL || t == "official"
-}
-
 fn route_from_default(def: Option<&str>, providers: &[CustomProvider]) -> (String, Option<String>) {
     if let Some(d) = def {
         let d = d.trim();
-        if !d.is_empty()
-            && !is_reserved_custom_provider_id(d)
-            && providers.iter().any(|p| p.id == d)
-        {
+        if !d.is_empty() && providers.iter().any(|p| p.id == d) {
             return ("custom".into(), Some(d.to_string()));
         }
     }
+    // `official` is retained only as a stable frontend DTO value. It now means
+    // "no App-managed provider section is selected", not a special Grok route.
     ("official".into(), None)
 }
 
@@ -1291,7 +1277,7 @@ pub fn list_custom_providers() -> Result<ProvidersListResult, String> {
     let path = agent_config_toml();
     // Heal legacy App writes that stringified context_window (#538).
     let _ = ensure_model_integer_fields();
-    // Existing App-only effort choices need the native Grok Build capability gate.
+    // Existing App-only effort choices need the native Supercharge capability gate.
     let _ = ensure_reasoning_effort_support_fields();
     let text = read_text(&path);
     Ok(build_list_result(home, path, &text))
@@ -1321,32 +1307,6 @@ pub fn is_custom_provider_id(id: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub fn provider_mode_for_id(id: &str) -> String {
-    let id = id.trim();
-    if id.is_empty() {
-        return default_provider_mode();
-    }
-    list_custom_providers()
-        .ok()
-        .and_then(|list| list.providers.into_iter().find(|p| p.id == id))
-        .map(|p| p.provider_mode)
-        .unwrap_or_else(default_provider_mode)
-}
-
-/// Preserve the complete-path contract when callers edit only the active model
-/// or context window and omit the provider form's URL toggle.
-pub fn provider_base_url_full_path_for_id(id: &str) -> bool {
-    let id = id.trim();
-    if id.is_empty() {
-        return false;
-    }
-    list_custom_providers()
-        .ok()
-        .and_then(|list| list.providers.into_iter().find(|p| p.id == id))
-        .map(|p| p.base_url_full_path)
-        .unwrap_or(false)
-}
-
 /// Extra system-prompt rules configured on the active custom channel.
 ///
 /// Relays vary in what they need spelled out (tool syntax, language, refusal
@@ -1364,154 +1324,36 @@ pub fn active_provider_append_prompt() -> Option<String> {
         .and_then(|p| p.append_prompt)
 }
 
-/// Owning `[model.<id>]` section for a composer / `app_models[].id` catalog id.
-///
-/// Used when the App picker stores the request-body id (e.g. `qwen3.8-27b`)
-/// while Grok Build `--model` only understands the TOML table name
-/// (`qwen38-local`). Official catalog ids are never remapped, even when a
-/// relay also lists `grok-4.6` in `app_models`. Section ids themselves are
-/// excluded — callers use `is_custom_provider_id` for those.
-pub fn custom_provider_id_for_catalog_model(catalog_id: &str) -> Option<String> {
-    let catalog_id = catalog_id.trim();
-    if catalog_id.is_empty() || is_official_catalog_model(catalog_id) {
-        return None;
-    }
-    let list = list_custom_providers().ok()?;
-    for p in &list.providers {
-        if p.id == catalog_id {
-            continue;
-        }
-        if p.model == catalog_id || p.models.iter().any(|m| m.id == catalog_id) {
-            return Some(p.id.clone());
-        }
-    }
-    None
-}
-
-/// Model flag for `grok agent --model` and ACP `session/set_model`.
-///
-/// Grok Build behavior:
-/// - Generic custom route: pass the **provider section id** (e.g. `yunyi`) and
-///   do not keep OIDC `auth.json` in GROK_HOME.
-/// - Explicit Grok Build proxy route: `AcpClient::spawn` replaces this alias
-///   with the selected real catalog model after binding the native endpoint.
-/// - Official route: pass a catalog id (`grok-4.6`); needs `auth.json`.
-/// - Official route + stale custom `app_models[].id` (#1000): map back to the
-///   owning section id so spawn `--model` and later `session/set_model` agree.
-///   CLI `--model` does not resolve App-only `app_models` ids; ACP set_model can,
-///   which previously caused turn-1 official / turn-2 custom silent switches.
+/// Model flag for the Supercharge agent and ACP `session/set_model`.
+/// App-managed provider sections still select by section id; otherwise pass a
+/// real catalog model id through unchanged and let the CLI own resolution.
 pub fn agent_spawn_model_id(composer_model: &str) -> String {
     match active_route() {
         ActiveRoute::Custom { id } => id,
         ActiveRoute::Official => {
-            let m = composer_model.trim();
-            if m.is_empty() || is_custom_provider_id(m) || m == OFFICIAL_DEFAULT_MODEL {
-                return OFFICIAL_CATALOG_MODEL.into();
+            let requested = composer_model.trim();
+            if !requested.is_empty() && !is_custom_provider_id(requested) {
+                return requested.to_string();
             }
-            if is_official_catalog_model(m) {
-                return m.into();
-            }
-            // Picker stored app_models[].id / active `model =` while route is still
-            // official (common under session-scoped prefs + sticky settings.json).
-            if let Some(provider_id) = custom_provider_id_for_catalog_model(m) {
-                return provider_id;
-            }
-            m.into()
+            crate::models_catalog::list_available_models().default_model_id
         }
     }
 }
 
-fn grok_build_proxy_spawn_from_text(
-    text: &str,
-    composer_model: &str,
-) -> Option<GrokBuildProxySpawn> {
-    let default = get_models_default(text)?;
-    let section = parse_model_sections(text)
-        .into_iter()
-        .find(|s| s.id == default)?;
-    if normalize_provider_mode(
-        section
-            .fields
-            .get(APP_PROVIDER_MODE_KEY)
-            .map(|s| s.as_str()),
-    ) != PROVIDER_MODE_GROK_BUILD_PROXY
-    {
-        return None;
-    }
-    let base_url = crate::relay_stream_proxy::effective_upstream_base(&section.fields)
-        .trim()
-        .trim_end_matches('/')
-        .to_string();
-    let api_key = section.fields.get("api_key")?.trim().to_string();
-    if base_url.is_empty() || api_key.is_empty() {
-        return None;
-    }
-    let configured_model = section
-        .fields
-        .get("model")
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .unwrap_or(section.id.as_str());
-    let models = decode_app_models(
-        section.fields.get(APP_MODELS_KEY).map(|s| s.as_str()),
-        configured_model,
-        configured_model,
-    );
-    let requested = composer_model.trim();
-    let model = if !requested.is_empty() && models.iter().any(|m| m.id == requested) {
-        requested.to_string()
-    } else {
-        resolve_active_model(&models, configured_model)
-    };
-    let models_url = models_list_endpoint(&base_url).ok()?;
-    Some(GrokBuildProxySpawn {
-        base_url,
-        models_url,
-        api_key,
-        model,
-    })
+/// Compatibility hook for spawn code that previously installed a special
+/// Grok relay environment. Supercharge provider routing leaves it disabled.
+pub fn active_grok_build_proxy_spawn(_composer_model: &str) -> Option<GrokBuildProxySpawn> {
+    // Supercharge provider entries are authoritative and no longer rebound to
+    // the legacy native Grok chat-proxy environment.
+    None
 }
 
-/// Resolve the active explicit Grok Build-compatible relay for one ACP spawn.
-/// The key is returned only to the spawn caller and must never be logged.
-pub fn active_grok_build_proxy_spawn(composer_model: &str) -> Option<GrokBuildProxySpawn> {
-    let text = read_text(&agent_config_toml());
-    grok_build_proxy_spawn_from_text(&text, composer_model)
-}
-
-/// After official login / account switch: only the official route should
-/// receive a copy of `~/.grok/auth.json` in agent-home. Custom relays must
-/// keep that file out so Grok Build uses `[model.<id>].api_key`.
-pub fn should_sync_cli_auth_after_account_change(route: &ActiveRoute) -> bool {
-    matches!(route, ActiveRoute::Official)
-}
-
-/// Prepare agent-home auth material for the active route.
-///
-/// Custom: strip agent-home `auth.json` so inference uses `api_key` only.
-/// Official: mirror `~/.grok/auth.json` into agent-home for OAuth.
+/// Legacy account callbacks call this before spawning an agent. Supercharge
+/// owns its credentials and provider selection, so provider changes must not
+/// copy or delete auth files. Keep only the independent-home/config prep.
 pub fn prepare_route_auth_for_agent() {
-    match active_route() {
-        ActiveRoute::Custom { ref id } => {
-            // Heal shared→independent before spawn so GROK_HOME matches config (#557).
-            let _ = ensure_independent_for_custom_route();
-            crate::account::clear_agent_home_auth();
-            tracing::info!(
-                target: "providers",
-                "custom route `{id}`: cleared agent-home auth.json (api_key only)"
-            );
-        }
-        ActiveRoute::Official => {
-            debug_assert!(should_sync_cli_auth_after_account_change(
-                &ActiveRoute::Official
-            ));
-            if let Err(e) = crate::account::sync_cli_auth_to_agent_home() {
-                tracing::warn!(
-                    target: "providers",
-                    "official route: auth sync failed: {e}"
-                );
-            }
-        }
+    if matches!(active_route(), ActiveRoute::Custom { .. }) {
+        let _ = ensure_independent_for_custom_route();
     }
     // Never import Claude/Cursor MCP catalogs into App agent-home sessions.
     let mode = crate::store::load_settings().session_data_mode;
@@ -1523,10 +1365,9 @@ pub fn prepare_route_auth_for_agent() {
     }
 }
 
-/// Switch active route: `official` or `custom` (+ provider_id).
-///
-/// Completely rebinds agent-home credentials so the next ACP spawn cannot
-/// mix OIDC with a custom relay (or leave a relay as default when going official).
+/// Switch the active App-managed provider. `official` remains accepted as a
+/// compatibility command name and selects the current catalog default instead
+/// of a synthetic product route.
 pub fn activate_provider(
     source: &str,
     provider_id: Option<&str>,
@@ -1534,17 +1375,11 @@ pub fn activate_provider(
     let source = source.trim().to_ascii_lowercase();
     match source.as_str() {
         "official" => {
-            let result = set_default_model_id(OFFICIAL_DEFAULT_MODEL)?;
-            // Restore official OAuth into agent-home; drop relay display fields.
-            if let Err(e) = crate::account::sync_cli_auth_to_agent_home() {
-                tracing::warn!(target: "providers", "activate official: auth sync: {e}");
+            let default = crate::models_catalog::list_available_models().default_model_id;
+            if default.is_empty() {
+                return Err("no configured Supercharge model is available".into());
             }
-            let mut secrets = crate::store::load_secrets();
-            secrets.relay_base_url = None;
-            // Prefer catalog id for composer, not the synthetic "grok" default key.
-            secrets.default_model = Some(OFFICIAL_CATALOG_MODEL.into());
-            let _ = crate::store::save_secrets(&secrets);
-            Ok(result)
+            set_default_model_id(&default)
         }
         "custom" => {
             let id = provider_id
@@ -1556,17 +1391,6 @@ pub fn activate_provider(
                 return Err(format!("unknown provider `{id}`"));
             }
             let mut result = set_default_model_id(id)?;
-            // Critical: remove OIDC so Grok Build uses [model.<id>].api_key.
-            crate::account::clear_agent_home_auth();
-            if let Some(p) = result.providers.iter().find(|p| p.id == id) {
-                let mut secrets = crate::store::load_secrets();
-                secrets.relay_base_url = Some(p.base_url.clone());
-                // Route id selects the channel; upstream model lives in config.toml.
-                secrets.default_model = Some(id.to_string());
-                let _ = crate::store::save_secrets(&secrets);
-            }
-            // #557: agent-home config is only live when GROK_HOME is agent-home.
-            // set_default_model_id may already have switched; OR so we don't clobber.
             result.switched_to_independent =
                 result.switched_to_independent || ensure_independent_for_custom_route();
             Ok(result)
@@ -1636,22 +1460,12 @@ pub fn upsert_custom_provider(input: UpsertProviderInput) -> Result<ProvidersLis
         return Err("base_url must start with http:// or https://".into());
     }
     // OpenCode Zen Go etc.: CLI talks to loopback sanitize proxy; real host in
-    // app_upstream_base_url (ignored by Grok Build).
-    let (base_url, app_upstream) = if provider_mode == PROVIDER_MODE_GROK_BUILD_PROXY {
-        // Native catalog/proxy mode talks straight to the configured endpoint;
-        // the generic SSE sanitizer is a different provider contract.
-        (user_base.clone(), None)
-    } else {
-        crate::relay_stream_proxy::rewrite_base_for_cli(&id, &user_base, &api_backend, full_path)?
-    };
+    // app_upstream_base_url (ignored by Supercharge).
+    let (base_url, app_upstream) =
+        crate::relay_stream_proxy::rewrite_base_for_cli(&id, &user_base, &api_backend, full_path)?;
     let create_only = input.create_only.unwrap_or(false);
     if create_only && existing.is_some() {
         return Err(format!("provider id `{id}` already exists"));
-    }
-    if is_reserved_custom_provider_id(&id) && existing.is_none() {
-        return Err(format!(
-            "provider id `{id}` is reserved for Official Grok — pick another id"
-        ));
     }
     let prev_key = existing
         .and_then(|s| s.fields.get("api_key"))
@@ -1829,9 +1643,7 @@ pub fn upsert_custom_provider(input: UpsertProviderInput) -> Result<ProvidersLis
     write_text(&path, &text)?;
     let mut result = list_custom_providers()?;
     if input.set_as_default.unwrap_or(false) {
-        // Newly defaulted custom channel must not inherit OIDC.
-        crate::account::clear_agent_home_auth();
-        // #557: keep GROK_HOME on agent-home when this becomes the live route.
+        // Keep the App-managed provider config visible to the spawned runtime.
         result.switched_to_independent = ensure_independent_for_custom_route();
     }
     Ok(result)
@@ -1853,16 +1665,17 @@ pub fn remove_custom_provider(id: &str) -> Result<ProvidersListResult, String> {
     if parse_model_sections(&text).iter().any(|s| s.id == id) {
         return Err(format!("failed to remove provider `{id}` from config"));
     }
-    let fell_back_official = def.as_deref() == Some(id.as_str());
-    if fell_back_official {
-        text = set_models_default(&text, OFFICIAL_DEFAULT_MODEL);
+    let removed_default = def.as_deref() == Some(id.as_str());
+    if removed_default {
+        let fallback = crate::models_catalog::list_available_models().default_model_id;
+        if fallback.is_empty() {
+            text = remove_models_default(&text);
+        } else {
+            text = set_models_default(&text, &fallback);
+        }
     }
     write_text(&path, &text)?;
-    let result = list_custom_providers()?;
-    if fell_back_official {
-        prepare_route_auth_for_agent();
-    }
-    Ok(result)
+    list_custom_providers()
 }
 
 pub fn set_default_model_id(model_id: &str) -> Result<ProvidersListResult, String> {
@@ -2801,25 +2614,16 @@ mod tests {
     }
 
     #[test]
-    fn official_default_is_not_a_custom_route_even_if_id_collides() {
+    fn configured_provider_ids_are_authoritative_even_when_named_grok() {
         let grok = [sample_provider("grok")];
         let (source, pid) = route_from_default(Some("grok"), &grok);
-        assert_eq!(source, "official");
-        assert_eq!(pid, None);
+        assert_eq!(source, "custom");
+        assert_eq!(pid.as_deref(), Some("grok"));
 
         let relay = [sample_provider("relay")];
         let (custom_src, custom_id) = route_from_default(Some("relay"), &relay);
         assert_eq!(custom_src, "custom");
         assert_eq!(custom_id.as_deref(), Some("relay"));
-    }
-
-    #[test]
-    fn reserved_custom_ids() {
-        assert!(is_reserved_custom_provider_id("grok"));
-        assert!(is_reserved_custom_provider_id("GROK"));
-        assert!(is_reserved_custom_provider_id("official"));
-        assert!(!is_reserved_custom_provider_id("grok-relay"));
-        assert!(!is_reserved_custom_provider_id("relay"));
     }
 
     #[test]
@@ -2915,6 +2719,17 @@ mod tests {
     }
 
     #[test]
+    fn preserves_all_supported_api_backends() {
+        assert_eq!(
+            normalize_backend(Some("chat_completions")),
+            "chat_completions"
+        );
+        assert_eq!(normalize_backend(Some("responses")), "responses");
+        assert_eq!(normalize_backend(Some("messages")), "messages");
+        assert_eq!(normalize_backend(Some("unknown")), "chat_completions");
+    }
+
+    #[test]
     fn full_path_skips_v1_append() {
         // Volcengine Ark Coding Plan roots must not gain trailing /v1.
         assert_eq!(
@@ -2958,11 +2773,11 @@ mod tests {
     }
 
     #[test]
-    fn provider_mode_is_explicit_and_defaults_generic() {
+    fn provider_modes_normalize_to_generic() {
         assert_eq!(normalize_provider_mode(None), PROVIDER_MODE_GENERIC);
         assert_eq!(
             normalize_provider_mode(Some("grok_build_proxy")),
-            PROVIDER_MODE_GROK_BUILD_PROXY
+            PROVIDER_MODE_GENERIC
         );
         assert_eq!(
             normalize_provider_mode(Some("beefapi")),
@@ -2972,66 +2787,25 @@ mod tests {
     }
 
     #[test]
-    fn native_proxy_requires_live_backend_search_capability() {
-        let remote = vec![
-            RemoteModel {
-                id: "grok-4.6".into(),
-                owned_by: None,
-                supports_backend_search: Some(true),
-                ..Default::default()
-            },
-            RemoteModel {
-                id: "grok-4.5".into(),
-                owned_by: None,
-                supports_backend_search: None,
-                ..Default::default()
-            },
-        ];
-        let selected = vec![ProviderModelEntry::named("grok-4.6", "Grok 4.6")];
-        assert!(validate_grok_build_proxy_models(&remote, &selected).is_ok());
-
-        let unsupported = vec![ProviderModelEntry::named("grok-4.5", "Grok 4.5")];
-        assert!(validate_grok_build_proxy_models(&remote, &unsupported)
+    fn legacy_native_proxy_validation_is_disabled() {
+        let remote = vec![RemoteModel {
+            id: "provider-model".into(),
+            owned_by: None,
+            supports_backend_search: Some(true),
+            ..Default::default()
+        }];
+        let selected = vec![ProviderModelEntry::named(
+            "provider-model",
+            "Provider model",
+        )];
+        assert!(validate_grok_build_proxy_models(&remote, &selected)
             .unwrap_err()
-            .contains("supports_backend_search=true"));
+            .contains("no longer an active"));
     }
 
     #[test]
-    fn native_proxy_spawn_uses_real_model_and_process_only_binding() {
-        let models = encode_app_models(&[
-            ProviderModelEntry::named("grok-4.6", "Grok 4.6"),
-            ProviderModelEntry::named("grok-4.5", "Grok 4.5"),
-        ]);
-        let text = set_models_default(
-            &append_section(
-                "",
-                "beef-relay",
-                &[
-                    ("model".into(), "grok-4.6".into()),
-                    ("base_url".into(), "https://relay.example/v1".into()),
-                    ("api_key".into(), "runtime-key".into()),
-                    ("api_backend".into(), "responses".into()),
-                    (
-                        APP_PROVIDER_MODE_KEY.into(),
-                        PROVIDER_MODE_GROK_BUILD_PROXY.into(),
-                    ),
-                    (APP_MODELS_KEY.into(), models),
-                ],
-            ),
-            "beef-relay",
-        );
-        let spawn = grok_build_proxy_spawn_from_text(&text, "grok-4.5").expect("spawn");
-        assert_eq!(spawn.model, "grok-4.5");
-        assert_ne!(spawn.model, "beef-relay");
-        assert_eq!(spawn.base_url, "https://relay.example/v1");
-        assert_eq!(spawn.models_url, "https://relay.example/v1/models");
-        assert_eq!(spawn.api_key, "runtime-key");
-
-        let generic = text.replace(
-            "app_provider_mode = \"grok_build_proxy\"",
-            "app_provider_mode = \"generic\"",
-        );
-        assert!(grok_build_proxy_spawn_from_text(&generic, "grok-4.5").is_none());
+    fn legacy_native_proxy_binding_is_inactive() {
+        assert!(active_grok_build_proxy_spawn("any-model").is_none());
     }
 
     #[test]
@@ -3439,11 +3213,11 @@ api_backend = \"responses\"";
         let config = result.expect("custom provider should be written");
         assert!(
             config.contains("supports_reasoning_effort = true"),
-            "Grok Build must see the native capability gate:\n{config}"
+            "Supercharge must see the native capability gate:\n{config}"
         );
         assert!(
             !config.contains("supports_reasoning_effort = \"true\""),
-            "Grok Build requires a TOML boolean, not a string:\n{config}"
+            "Supercharge requires a TOML boolean, not a string:\n{config}"
         );
     }
 
@@ -3508,7 +3282,7 @@ app_efforts = "[{\"id\":\"xhigh\",\"name\":\"Extra high\",\"isDefault\":true}]"
                 ("context_window".into(), "1000000".into()),
             ],
         );
-        // Grok Build requires a bare integer — never a quoted string (#538).
+        // Supercharge requires a bare integer — never a quoted string (#538).
         assert!(
             text.contains("context_window = 1000000"),
             "expected bare integer, got:\n{text}"
@@ -3613,25 +3387,9 @@ context_window = "1000000"
     }
 
     #[test]
-    fn login_must_not_sync_oidc_into_custom_agent_home() {
-        // grok login always writes ~/.grok/auth.json. Copying that into
-        // agent-home while a custom relay is active makes the next spawn
-        // send OIDC to the relay. Official stays the only route that
-        // should receive the mirror.
-        assert!(!should_sync_cli_auth_after_account_change(
-            &ActiveRoute::Custom {
-                id: "claudex".into()
-            }
-        ));
-        assert!(should_sync_cli_auth_after_account_change(
-            &ActiveRoute::Official
-        ));
-    }
-
-    #[test]
-    fn spawn_model_maps_app_models_id_when_route_still_official() {
-        // #1000: picker stores app_models[].id; [models].default stays official.
-        // --model must receive the TOML section id, not the catalog id.
+    fn spawn_model_preserves_real_catalog_id_without_route_assumptions() {
+        // A catalog id must remain a catalog id even when an inactive provider
+        // happens to list the same upstream request model.
         let _lock = crate::paths::APP_HOME_ENV_LOCK
             .lock()
             .unwrap_or_else(|e| e.into_inner());
@@ -3667,15 +3425,12 @@ context_window = "1000000"
         .expect("upsert");
         assert_eq!(listed.active_source, "official");
 
-        assert_eq!(
-            custom_provider_id_for_catalog_model("qwen3.8-27b").as_deref(),
-            Some("qwen38-local")
-        );
-        assert_eq!(agent_spawn_model_id("qwen3.8-27b"), "qwen38-local");
-        // Official catalog ids must not remap through a relay that also lists them.
+        assert_eq!(agent_spawn_model_id("qwen3.8-27b"), "qwen3.8-27b");
         assert_eq!(agent_spawn_model_id("grok-4.6"), "grok-4.6");
-        // Bare section id on official route still falls back to catalog (legacy).
-        assert_eq!(agent_spawn_model_id("qwen38-local"), OFFICIAL_CATALOG_MODEL);
+        // An inactive provider section id resolves to the configured catalog default,
+        // never to a hard-coded product route.
+        let fallback = crate::models_catalog::list_available_models().default_model_id;
+        assert_eq!(agent_spawn_model_id("qwen38-local"), fallback);
 
         match previous_home {
             Some(value) => std::env::set_var("GROK_APP_HOME", value),

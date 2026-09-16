@@ -1,4 +1,4 @@
-//! Host-only credentials for the fixed Grok Build Responses route.
+//! Host-only credentials for the fixed Supercharge Responses route.
 use super::{cli_default_auth_json_path, jwt_payload_unverified};
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use rand::RngCore;
@@ -19,10 +19,10 @@ const LEGACY_XAI_AUTH_SCOPE: &str = "https://accounts.x.ai/sign-in";
 const BUILD_OAUTH_EXPIRY_SKEW_SECS: i64 = 60;
 const BUILD_OAUTH_FALLBACK_TTL_DAYS: i64 = 30;
 
-/// Non-secret identity of the canonical Grok Build credential file.
+/// Non-secret identity of the canonical Supercharge credential file.
 ///
 /// The wallpaper Responses router uses this to forget credential-specific
-/// failures after Grok Build refreshes or replaces `auth.json`. It intentionally
+/// failures after Supercharge refreshes or replaces `auth.json`. It intentionally
 /// contains neither the path nor any credential material.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct BuildOauthCredentialRevision {
@@ -83,7 +83,7 @@ impl BuildOauthTokenError {
     }
 }
 
-/// Read the canonical Grok Build OAuth access token for Host-only side routes.
+/// Read the canonical Supercharge OAuth access token for Host-only side routes.
 ///
 /// This intentionally ignores process `GROK_HOME`: a custom provider or an
 /// independent agent home must never redirect the official wallpaper side
@@ -99,7 +99,7 @@ pub(crate) fn read_build_oauth_access_token() -> Result<BuildOauthAccessToken, B
     read_build_oauth_access_token_from_path_at(&cli_default_auth_json_path(), Utc::now())
 }
 
-/// Current non-secret revision of canonical Grok Build credentials.
+/// Current non-secret revision of canonical Supercharge credentials.
 pub(crate) fn build_oauth_credential_revision() -> Option<BuildOauthCredentialRevision> {
     build_oauth_credential_revision_from_path(&cli_default_auth_json_path())
 }
@@ -171,7 +171,7 @@ enum BuildOauthCandidateVerdict<'a> {
 
 /// Select only a production xAI credential suitable for the fixed Build proxy.
 ///
-/// Match Grok Build's current-scope then legacy-scope lookup order. Unverified
+/// Match Supercharge's current-scope then legacy-scope lookup order. Unverified
 /// JWT claims are used only to reject an explicit issuer, audience, or expiry
 /// conflict before any bearer is sent.
 fn select_build_oauth_access_token<'a>(

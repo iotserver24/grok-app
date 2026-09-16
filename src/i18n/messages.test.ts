@@ -124,6 +124,33 @@ describe("i18n catalog", () => {
     }
   });
 
+  it("keeps first-run and sidebar chrome provider-neutral", () => {
+    const setupKeys: MessageKey[] = [
+      "setup.account.title",
+      "setup.account.hint",
+      "setup.account.relay",
+      "setup.account.relayHint",
+      "setup.reuseCliAuthTitle",
+      "setup.reuseCliAuthDesc",
+      "setup.account.skip",
+      "setup.ready.authOk",
+      "setup.ready.authSkip",
+      "setup.ready.authSoftNote",
+      "setup.ready.enter",
+      "user.menu",
+    ];
+    for (const loc of LOCALES) {
+      for (const key of setupKeys) {
+        expect(messages[loc][key], `${loc}.${key}`).not.toMatch(
+          /(?:supergrok|grok(?:-go| build)?|xai|x\.ai|oauth)/i,
+        );
+      }
+      expect(messages[loc]["app.tagline"], loc).toBe(
+        "building beyond limits",
+      );
+    }
+  });
+
   it("non-Chinese catalogs do not copy Simplified Chinese values", () => {
     // A catalog value that equals `zh` and contains simplified-only Han
     // (无/设/渠/话/…) is never correct Japanese or Korean. Shared

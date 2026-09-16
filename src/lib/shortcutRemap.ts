@@ -15,7 +15,7 @@
 
 import type { ShortcutId, ShortcutScope } from "@/lib/shortcuts";
 
-export const SHORTCUT_REMAP_STORAGE_KEY = "grok.shortcutRemap";
+export const SHORTCUT_REMAP_STORAGE_KEY = "supercharge.shortcutRemap";
 
 /** Fired on `window` after a same-tab remap save (storage events are cross-tab only). */
 export const SHORTCUT_REMAP_CHANGED_EVENT = "grok:shortcutRemap";
@@ -26,7 +26,7 @@ export const SHORTCUT_REMAP_CHANGED_EVENT = "grok:shortcutRemap";
  * Default false preserves historical same-chord-is-conflict behavior.
  */
 export const SHORTCUT_IGNORE_CROSS_SCOPE_STORAGE_KEY =
-  "grok.shortcutIgnoreCrossScopeConflicts";
+  "supercharge.shortcutIgnoreCrossScopeConflicts";
 
 /** Fired on `window` after a same-tab ignore-cross-scope pref save. */
 export const SHORTCUT_IGNORE_CROSS_SCOPE_CHANGED_EVENT =
@@ -93,7 +93,6 @@ export const DEFAULT_SHORTCUT_CHORDS: Record<ShortcutId, ChordString> = {
   zoomOut: "mod+-",
   zoomReset: "mod+0",
   doctor: "mod+shift+d",
-  liveVoice: "mod+shift+v",
   dictation: "ctrl+space",
   promptHistory: "arrowup",
   typeToFocus: "type",
@@ -110,7 +109,6 @@ export const REMAPPABLE_SHORTCUT_IDS = [
   "settings",
   "help",
   "doctor",
-  "liveVoice",
   "copyLastReply",
   "toggleSidebar",
   "toggleRightPane",

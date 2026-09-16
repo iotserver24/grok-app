@@ -6,7 +6,7 @@
 
 import { isFusedQueryKeyPath } from "@/lib/pathNormalize";
 
-export const IMAGE_ASPECT_CACHE_STORAGE_KEY = "grok.imageAspectCache.v1";
+export const IMAGE_ASPECT_CACHE_STORAGE_KEY = "supercharge.imageAspectCache.v1";
 /** Cap disk entries (LRU by last-write). */
 export const IMAGE_ASPECT_CACHE_MAX = 500;
 

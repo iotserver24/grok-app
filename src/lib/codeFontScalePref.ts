@@ -6,7 +6,7 @@
 
 export type CodeFontScale = "sm" | "md" | "lg";
 
-export const CODE_FONT_SCALE_STORAGE_KEY = "grok.codeFontScale";
+export const CODE_FONT_SCALE_STORAGE_KEY = "supercharge.codeFontScale";
 export const DEFAULT_CODE_FONT_SCALE: CodeFontScale = "md";
 
 export const CODE_FONT_SCALES: readonly CodeFontScale[] = [

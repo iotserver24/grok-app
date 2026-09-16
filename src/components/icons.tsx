@@ -188,7 +188,7 @@ function wrap(Tb: TbIcon, defaults?: { stroke?: number; className?: string }) {
  */
 export function IconGrokMark({
   size = 22,
-  title = "Grok",
+  title = "Supercharge",
   className = "",
 }: IconProps) {
   const classes = ["g-icon", "g-icon--grok-mark", className]

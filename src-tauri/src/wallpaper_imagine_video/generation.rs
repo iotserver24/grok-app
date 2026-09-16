@@ -109,7 +109,7 @@ fn validate_input(actual: &Value, expected: &Value) -> Result<(), &'static str> 
     if actual == expected {
         return Ok(());
     }
-    // Grok Build progress updates serialize ImageGen's tagged input enum.
+    // Supercharge progress updates serialize ImageGen's tagged input enum.
     // Accept that one known tag while requiring every request field unchanged.
     if let (Some(actual), Some(expected)) = (actual.as_object(), expected.as_object()) {
         if actual.get("variant").and_then(Value::as_str) == Some("ImageGen")

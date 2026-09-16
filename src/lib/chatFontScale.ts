@@ -6,7 +6,7 @@
 
 export type ChatFontScale = "sm" | "md" | "lg";
 
-export const CHAT_FONT_SCALE_STORAGE_KEY = "grok.chatFontScale";
+export const CHAT_FONT_SCALE_STORAGE_KEY = "supercharge.chatFontScale";
 export const DEFAULT_CHAT_FONT_SCALE: ChatFontScale = "md";
 
 export const CHAT_FONT_SCALES: readonly ChatFontScale[] = [

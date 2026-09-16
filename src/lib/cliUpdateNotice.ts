@@ -3,7 +3,7 @@
  * Persist dismissals so the same latest version is not re-offered too often.
  */
 
-const STORAGE_KEY = "grok.cliUpdateNotice.v1";
+const STORAGE_KEY = "supercharge.cliUpdateNotice.v1";
 
 export type CliUpdateNoticeRecord = {
   /** Last dismissed latest version (or empty). */

@@ -4,7 +4,7 @@
  * Power users can switch to Cmd/Ctrl+Enter to send (Enter inserts newline).
  */
 
-const STORAGE_KEY = "grok.composerSendKey";
+const STORAGE_KEY = "supercharge.composerSendKey";
 
 /** Fired on `window` after a same-tab preference save (storage events are cross-tab only). */
 export const COMPOSER_SEND_KEY_CHANGED_EVENT = "grok:composerSendKey";

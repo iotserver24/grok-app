@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import * as api from "@/lib/api";
+import * as api from "@/lib/api/wallpaper";
 import { createWallpaperXSearchRequestId, isWallpaperXSearchBatch, type WallpaperXSearchBatch, isWallpaperXSearchProgress, type WallpaperXSearchProgress, type WallpaperXSearchStage } from "@/lib/wallpaperXSearch";
 import { dedupeGalleryItems, type WallpaperGalleryItem, type WallpaperSearchResult } from "@/lib/wallpaperSource";
 

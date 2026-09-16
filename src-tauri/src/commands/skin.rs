@@ -19,7 +19,10 @@ pub async fn skin_pick_open() -> Result<Option<String>, String> {
     let file = tauri::async_runtime::spawn_blocking(|| {
         rfd::FileDialog::new()
             .set_title("Open appearance pack")
-            .add_filter("Grok skin pack", &["grokskin", "zip"])
+            .add_filter(
+                "Supercharge skin pack",
+                &["superchargeskin", "grokskin", "zip"],
+            )
             .pick_file()
     })
     .await
@@ -33,12 +36,12 @@ pub async fn skin_pick_open() -> Result<Option<String>, String> {
 #[tauri::command]
 pub async fn skin_pick_save(default_name: Option<String>) -> Result<Option<String>, String> {
     desktop_only()?;
-    let name = default_name.unwrap_or_else(|| "skin.grokskin".into());
+    let name = default_name.unwrap_or_else(|| "skin.superchargeskin".into());
     let file = tauri::async_runtime::spawn_blocking(move || {
         rfd::FileDialog::new()
             .set_title("Save appearance pack")
             .set_file_name(&name)
-            .add_filter("Grok skin pack", &["grokskin"])
+            .add_filter("Supercharge skin pack", &["superchargeskin", "grokskin"])
             .save_file()
     })
     .await

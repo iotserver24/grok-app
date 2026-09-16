@@ -1,6 +1,7 @@
 /**
- * Catalogs aligned with Grok Build CLI (`grok models`, reasoning effort, permission).
- * Live selectable models come from `models_list_available` (CLI cache + custom providers).
+ * Catalogs aligned with the Supercharge CLI (`supercharge models`, reasoning effort, permission).
+ * Live selectable models come from ACP `_meta.modelState`; the host uses the
+ * Supercharge CLI cache only before the first live handshake.
  * Update docs/llm-wiki/catalog.md when defaults change.
  */
 
@@ -21,7 +22,7 @@ export interface ModelOption {
   label: string;
   /** True if CLI lists as default */
   isDefault?: boolean;
-  /** Catalog source; official list is one group in the composer model menu. */
+  /** Catalog provenance (`live` / `cache`); kept as a stable host DTO field. */
   source?: string;
   /** Per-model reasoning efforts from CLI cache; empty/undefined → static fallback. */
   reasoningEfforts?: EffortOption[];
@@ -65,7 +66,7 @@ export const COMPOSER_PREFS_SCOPES: ComposerPrefsScope[] = [
 
 /**
  * Static 3-tier fallback (low / medium / high) when a model has no
- * `reasoning_efforts` in cache. Default **high** matches Grok Build 1.0
+ * `reasoning_efforts` in cache. Default **high** matches the Supercharge CLI
  * and the official API default. Prefer live catalog via
  * `pickDefaultEffort(model)` whenever available.
  */
@@ -76,7 +77,7 @@ export const GROK_BUILD_EFFORTS: EffortOption[] = [
 ];
 
 /**
- * Official Grok 4.6 efforts (CLI `models_cache` 2026-08-12).
+ * Fallback Supercharge Core efforts when live catalog metadata is unavailable.
  * Product default on 4.6 is **xhigh**. Live cache may mark both high and
  * xhigh as `default: true` — callers must go through `pickDefaultEffort`
  * / `normalizeEffortDefaults`.
@@ -90,29 +91,12 @@ export const GROK_4_6_EFFORTS: EffortOption[] = [
 
 /**
  * Fallback catalog when Host has not returned live models yet.
- * Official OAuth exposes grok-4.6 (default) and grok-4.5 (2026-08 probe).
- * `grok-build` is NOT listed — CLI rejects it as unknown model id.
+ * Used only until the host returns the configured Supercharge model catalog.
  */
-export const GROK_BUILD_MODELS: ModelOption[] = [
-  {
-    id: "grok-4.6",
-    label: "Grok 4.6",
-    isDefault: true,
-    source: "official",
-    reasoningEfforts: GROK_4_6_EFFORTS,
-    contextWindow: 500000,
-  },
-  {
-    id: "grok-4.5",
-    label: "Grok 4.5",
-    source: "official",
-    reasoningEfforts: GROK_BUILD_EFFORTS,
-    contextWindow: 500000,
-  },
-];
+export const GROK_BUILD_MODELS: ModelOption[] = [];
 
-export const DEFAULT_MODEL_ID =
-  GROK_BUILD_MODELS.find((m) => m.isDefault)?.id ?? "grok-4.6";
+/** No model id is valid until ACP or the Supercharge cache supplies one. */
+export const DEFAULT_MODEL_ID = "";
 
 /**
  * Fallback context window (tokens) for custom providers that have not set one.
@@ -122,7 +106,7 @@ export const DEFAULT_CUSTOM_CONTEXT_WINDOW = 200000;
 
 /**
  * Cold-start default reasoning depth when no live catalog is loaded yet.
- * Aligned with Grok Build 1.0 official default (**high**). Users can lower
+ * Aligned with the Supercharge CLI default (**high**). Users can lower
  * effort for faster turns via the composer chip. Prefer
  * `pickDefaultEffort(model)` when the model lists a default.
  */
@@ -195,43 +179,28 @@ export function isValidModelId(
   return catalog.some((m) => m.id === id);
 }
 
-/**
- * Collapse multiple `isDefault` flags. CLI grok-4.6 cache marks both
- * `xhigh` and `high` as default; product default on 4.6 is **xhigh**.
- */
+/** Collapse malformed duplicate defaults without model-family assumptions. */
 export function normalizeEffortDefaults(
   efforts: EffortOption[],
 ): EffortOption[] {
-  const flagged = efforts.filter((e) => e.isDefault);
-  if (flagged.length <= 1) return efforts;
-  const preferXhigh = flagged.some(
-    (e) => e.id.trim().toLowerCase() === "xhigh",
-  );
-  if (preferXhigh) {
-    return efforts.map((e) => ({
-      ...e,
-      isDefault: e.id.trim().toLowerCase() === "xhigh",
-    }));
-  }
-  const preferHigh = flagged.some(
-    (e) => e.id.trim().toLowerCase() === "high",
-  );
-  if (!preferHigh) return efforts;
-  return efforts.map((e) => ({
-    ...e,
-    isDefault: e.id.trim().toLowerCase() === "high",
-  }));
+  let sawDefault = false;
+  return efforts.map((effort) => {
+    if (!effort.isDefault) return effort;
+    if (!sawDefault) {
+      sawDefault = true;
+      return effort;
+    }
+    return { ...effort, isDefault: false };
+  });
 }
 
-function fallbackEffortsForModelId(modelId?: string | null): EffortOption[] {
-  const id = modelId?.trim().toLowerCase() ?? "";
-  if (id === "grok-4.6") return GROK_4_6_EFFORTS;
+function fallbackEffortsForModelId(_modelId?: string | null): EffortOption[] {
   return GROK_BUILD_EFFORTS;
 }
 
 /**
- * Efforts list for a model: live catalog when non-empty, else static fallback.
- * grok-4.6 falls back to 4-tier (incl. xhigh); other official models stay 3-tier.
+ * Efforts list for a model: live catalog when non-empty, else the generic
+ * Supercharge three-tier fallback. Model IDs never imply provider semantics.
  */
 export function effortsForModel(
   model?: ModelOption | null,
@@ -264,8 +233,8 @@ export function isValidEffort(
 
 /**
  * Composer effort catalog for the active route.
- * Custom channels use their configured efforts; official uses the
- * selected model's live/fallback list (grok-4.6 includes xhigh).
+ * Custom channels use their configured efforts; catalog entries use their
+ * live effort metadata, falling back only when metadata is unavailable.
  */
 export function effortCatalogForRoute(opts: {
   model?: ModelOption | null;
@@ -619,9 +588,9 @@ export function findModel(
  *    occupancy usage) when positive — matches `/session-info`.
  * 2. Custom provider route: channel `contextWindow`, else
  *    {@link DEFAULT_CUSTOM_CONTEXT_WINDOW} (200k). **Custom only.**
- * 3. Official route: live model `contextWindow` from `models_cache` /
- *    `initialize` merge. Never invent 200k when live says 500k (or any
- *    other catalog value). `null` when unknown (chip hides the % row).
+ * 3. Catalog route: model `contextWindow` from authoritative ACP metadata,
+ *    or the cold-start cache before ACP is available. Never invent 200k;
+ *    `null` when unknown (chip hides the % row).
  */
 export function resolveContextWindow(opts: {
   activeCustomProvider?: { contextWindow?: number | null } | null;

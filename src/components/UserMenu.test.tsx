@@ -19,12 +19,13 @@ vi.mock("@/lib/floatingMenu", () => ({
 }));
 
 const labels = {
+  settings: "Settings",
+  whatsNew: "What's new",
+  tutorial: "Product tour",
   theme: "Theme",
   themeSystem: "System",
   themeLight: "Light",
   themeDark: "Dark",
-  login: "Log in",
-  logout: "Log out",
 };
 
 function Harness({ collapsed }: { collapsed: boolean }) {
@@ -39,14 +40,10 @@ function Harness({ collapsed }: { collapsed: boolean }) {
         theme="dark"
         themePreference="dark"
         labels={labels}
-        account={null}
-        activeProvider={null}
-        accountBusy={false}
+        onSettings={() => undefined}
         onTheme={() => undefined}
-        onLogin={() => undefined}
-        onLogout={() => undefined}
       >
-        <button type="button">Account</button>
+        <button type="button">Provider</button>
       </UserMenu>
     </>
   );
@@ -61,22 +58,16 @@ it("opens the theme editor from the theme submenu footer group", async () => {
       theme="dark"
       themePreference="dark"
       labels={{ ...labels, themeEditor: "Theme editor" }}
-      account={null}
-      activeProvider={null}
-      accountBusy={false}
+      onSettings={() => undefined}
       onTheme={() => undefined}
       onThemeEditor={onThemeEditor}
-      onLogin={() => undefined}
-      onLogout={() => undefined}
     >
-      <button type="button">Account</button>
+      <button type="button">Provider</button>
     </UserMenu>,
   );
 
   const themeItem = screen.getByRole("menuitem", { name: "Theme" });
   fireEvent.mouseEnter(themeItem);
-  // A pointer enters the row before click. The click must not immediately
-  // close the submenu that pointer entry just opened.
   fireEvent.click(themeItem);
   expect(themeItem.getAttribute("aria-expanded")).toBe("true");
   const editor = await screen.findByRole("menuitem", { name: "Theme editor" });
@@ -90,15 +81,11 @@ it("opens the theme editor from the theme submenu footer group", async () => {
       theme="dark"
       themePreference="dark"
       labels={{ ...labels, themeEditor: "Theme editor" }}
-      account={null}
-      activeProvider={null}
-      accountBusy={false}
+      onSettings={() => undefined}
       onTheme={() => undefined}
       onThemeEditor={onThemeEditor}
-      onLogin={() => undefined}
-      onLogout={() => undefined}
     >
-      <button type="button">Account</button>
+      <button type="button">Provider</button>
     </UserMenu>,
   );
   await waitFor(() =>
@@ -107,51 +94,68 @@ it("opens the theme editor from the theme submenu footer group", async () => {
   view.unmount();
 });
 
-it("does not put quota or settings in the account menu", async () => {
-  const view = render(
+it("shows only navigation and appearance actions, without account or quota controls", () => {
+  const onSettings = vi.fn();
+  render(
     <UserMenu
       open
       onClose={() => undefined}
       theme="dark"
       themePreference="dark"
       labels={labels}
-      account={null}
-      activeProvider={null}
-      accountBusy={false}
+      onSettings={onSettings}
+      onWhatsNew={() => undefined}
+      onTutorial={() => undefined}
       onTheme={() => undefined}
-      onLogin={() => undefined}
-      onLogout={() => undefined}
     >
-      <button type="button">Account</button>
+      <button type="button">Provider</button>
     </UserMenu>,
   );
-  expect(document.querySelector(".user-menu__account")).toBeNull();
-  expect(screen.queryByRole("menuitem", { name: "Settings" })).toBeNull();
+
+  expect(screen.getByRole("menuitem", { name: "Settings" })).toBeTruthy();
   expect(screen.getByRole("menuitem", { name: "Theme" })).toBeTruthy();
-  view.rerender(
+  expect(screen.getByRole("menuitem", { name: "What's new" })).toBeTruthy();
+  expect(screen.getByRole("menuitem", { name: "Product tour" })).toBeTruthy();
+  expect(document.querySelector(".user-menu__quota")).toBeNull();
+  expect(document.querySelector(".user-menu__accounts")).toBeNull();
+  expect(screen.queryByText(/log in|log out|sign in|sign out/i)).toBeNull();
+
+  fireEvent.click(screen.getByRole("menuitem", { name: "Settings" }));
+  expect(onSettings).toHaveBeenCalledTimes(1);
+});
+
+it("keeps generic provider balance with an explicit refresh action", () => {
+  const onRefresh = vi.fn();
+  render(
     <UserMenu
-      open={false}
+      open
       onClose={() => undefined}
       theme="dark"
       themePreference="dark"
       labels={labels}
-      account={null}
-      activeProvider={null}
-      accountBusy={false}
+      providerBalance={{
+        line: "9.55 CNY",
+        busy: false,
+        error: null,
+        refreshLabel: "Refresh balance",
+        refreshingLabel: "Checking…",
+        onRefresh,
+      }}
+      onSettings={() => undefined}
       onTheme={() => undefined}
-      onLogin={() => undefined}
-      onLogout={() => undefined}
     >
-      <button type="button">Account</button>
+      <button type="button">DeepSeek</button>
     </UserMenu>,
   );
-  await waitFor(() =>
-    expect(document.querySelector(".user-menu__pop--portal")).toBeNull(),
+
+  expect(screen.getByTestId("user-menu-balance").textContent).toContain(
+    "9.55 CNY",
   );
-  view.unmount();
+  fireEvent.click(screen.getByRole("button", { name: "Refresh balance" }));
+  expect(onRefresh).toHaveBeenCalledTimes(1);
 });
 
-it("clears an open account menu when the sidebar collapses", async () => {
+it("clears an open provider menu when the sidebar collapses", async () => {
   const view = render(<Harness collapsed={false} />);
   expect(document.querySelector(".user-menu__pop--portal")).not.toBeNull();
 
@@ -163,141 +167,4 @@ it("clears an open account menu when the sidebar collapses", async () => {
 
   view.rerender(<Harness collapsed={false} />);
   expect(document.querySelector(".user-menu__pop--portal")).toBeNull();
-});
-
-it("lists saved official accounts with remaining quota and switches on click", async () => {
-  const onSwitchAccount = vi.fn();
-  const onAccountSettings = vi.fn();
-  const account = {
-    profile: {
-      signedIn: true,
-      name: "Alice",
-      email: "alice@x.ai",
-      userId: "u1",
-    },
-    channel: "official_oauth" as const,
-    billing: {
-      plan: "SuperGrok",
-      usedPercent: 40,
-      remainingPercent: 60,
-      resetsAt: null,
-      fetchedAt: null,
-    },
-  };
-  render(
-    <UserMenu
-      open
-      onClose={() => undefined}
-      theme="dark"
-      themePreference="dark"
-      labels={{
-        ...labels,
-        remaining: "remaining",
-        profileActive: "Active",
-        switchTo: "Switch to",
-        resetsAt: "Resets",
-      }}
-      account={account as never}
-      activeProvider={null}
-      accountBusy={false}
-      savedAccounts={[
-        {
-          id: "a1",
-          email: "alice@x.ai",
-          displayName: "Alice",
-          label: "Alice",
-          updatedAt: "",
-        },
-        {
-          id: "a2",
-          email: "bob@x.ai",
-          displayName: "Bob",
-          label: "Bob",
-          updatedAt: "",
-        },
-      ]}
-      activeAccountId="a1"
-      accountQuotas={{
-        a2: {
-          remainingPercent: 25,
-          usedPercent: 75,
-          resetsAt: null,
-          available: true,
-        },
-      }}
-      onSwitchAccount={onSwitchAccount}
-      onAccountSettings={onAccountSettings}
-      onTheme={() => undefined}
-      onLogin={() => undefined}
-      onLogout={() => undefined}
-    >
-      <button type="button">Account</button>
-    </UserMenu>,
-  );
-
-  await waitFor(() =>
-    expect(screen.getByTestId("user-menu-accounts")).toBeTruthy(),
-  );
-  expect(screen.getByRole("menuitem", { name: "Alice, Active" })).toBeTruthy();
-  expect(screen.getByRole("menuitem", { name: "Switch to: Bob" })).toBeTruthy();
-  expect(screen.getByText("25% remaining")).toBeTruthy();
-
-  fireEvent.click(screen.getByRole("menuitem", { name: "Switch to: Bob" }));
-  expect(onSwitchAccount).toHaveBeenCalledWith("a2");
-
-  fireEvent.click(screen.getByRole("menuitem", { name: "Alice, Active" }));
-  expect(onAccountSettings).toHaveBeenCalled();
-});
-
-it("hides the single-account row when the top quota card is already shown", async () => {
-  const account = {
-    profile: {
-      signedIn: true,
-      name: "Alice",
-      email: "alice@x.ai",
-      userId: "u1",
-    },
-    channel: "official_oauth" as const,
-    billing: null,
-  };
-  render(
-    <UserMenu
-      open
-      onClose={() => undefined}
-      theme="dark"
-      themePreference="dark"
-      labels={{ ...labels, remaining: "remaining" }}
-      account={account as never}
-      activeProvider={null}
-      accountBusy={false}
-      officialQuota={{
-        plan: "Pro",
-        resetText: null,
-        remainLabel: "25%",
-        usedPercent: 75,
-        barFillClass: "",
-      }}
-      savedAccounts={[
-        {
-          id: "a1",
-          email: "alice@x.ai",
-          displayName: "Alice",
-          label: "Alice",
-          updatedAt: "",
-        },
-      ]}
-      activeAccountId="a1"
-      onTheme={() => undefined}
-      onLogin={() => undefined}
-      onLogout={() => undefined}
-    >
-      <button type="button">Account</button>
-    </UserMenu>,
-  );
-
-  await waitFor(() =>
-    expect(screen.getByTestId("user-menu-quota")).toBeTruthy(),
-  );
-  expect(screen.queryByTestId("user-menu-accounts")).toBeNull();
-  expect(screen.getByTestId("user-menu-quota").textContent).toContain("25%");
 });

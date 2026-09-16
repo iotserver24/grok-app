@@ -8,10 +8,4 @@ describe("skillChipGlyphSvg", () => {
     expect(svg).toContain("M7 10h3v-3");
     expect(svg).not.toContain("M6 21l15 -15");
   });
-
-  it("uses the imagine wand for the imagine skill", () => {
-    const svg = skillChipGlyphSvg("Imagine");
-    expect(svg).toContain("M6 21l15 -15");
-    expect(svg).not.toContain("M7 10h3v-3");
-  });
 });

@@ -375,35 +375,24 @@ describe("settingsCatalog", () => {
     );
   });
 
-  it("account has official · providers · extras tabs", () => {
-    expect(defaultTabFor("account")).toBe("official");
+  it("account exposes the provider configuration tab", () => {
+    expect(defaultTabFor("account")).toBe("providers");
     expect(resolveTab("account", "providers")).toBe("providers");
-    expect(resolveTab("account", "extras")).toBe("extras");
-    expect(resolveTab("account", "nope")).toBe("official");
+    expect(resolveTab("account", "official")).toBe("providers");
+    expect(resolveTab("account", "extras")).toBe("providers");
+    expect(resolveTab("account", "nope")).toBe("providers");
     expect(parseSettingsHash("settings/account/extras")).toEqual({
       section: "account",
-      tab: "extras",
+      tab: "providers",
     });
     expect(buildSettingsHash({ section: "account", tab: "extras" })).toBe(
-      "#/settings/account/extras",
+      "#/settings/account/providers",
     );
-    const aux = SETTINGS_ENTRIES.find((e) => e.id === "account.officialAuxInject");
-    expect(aux?.tab).toBe("extras");
   });
 
   it("search finds mcp / wallpaper / thinking / chat font / actions / cli path", () => {
     const tZh = createT("zh");
     const tEn = createT("en");
-    const inject = searchSettingsEntries("注入官方工具", tZh, tEn);
-    expect(
-      inject.some(
-        (h) =>
-          h.entry.id === "account.officialAuxInject" &&
-          h.entry.tab === "extras",
-      ),
-    ).toBe(true);
-    const extras = searchSettingsEntries("拓展", tZh, tEn);
-    expect(extras.some((h) => h.entry.id === "account.extras")).toBe(true);
     const mcp = searchSettingsEntries("mcp", tZh, tEn);
     expect(mcp.some((h) => h.entry.id === "ext.mcp")).toBe(true);
     const claudeSkills = searchSettingsEntries("claude", tZh, tEn);
@@ -604,7 +593,7 @@ describe("settingsCatalog", () => {
     ).toBe(true);
     const cli = searchSettingsEntries("CLI", tZh, tEn);
     expect(cli.some((h) => h.entry.section === "runtime")).toBe(true);
-    const sessionCmd = searchSettingsEntries("grok-app command", tZh, tEn);
+    const sessionCmd = searchSettingsEntries("supercharge app command", tZh, tEn);
     expect(
       sessionCmd.some((h) => h.entry.id === "runtime.sessionApi"),
     ).toBe(true);
@@ -615,14 +604,6 @@ describe("settingsCatalog", () => {
     const sessionApiZh = searchSettingsEntries("会话列表", tZh, tEn);
     expect(
       sessionApiZh.some((h) => h.entry.id === "runtime.sessionApi"),
-    ).toBe(true);
-    const importListed = searchSettingsEntries("import listed", tZh, tEn);
-    expect(
-      importListed.some((h) => h.entry.id === "account.callLogs"),
-    ).toBe(true);
-    const importZh = searchSettingsEntries("导入会话", tZh, tEn);
-    expect(
-      importZh.some((h) => h.entry.id === "account.callLogs"),
     ).toBe(true);
   });
 });

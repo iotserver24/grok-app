@@ -315,7 +315,7 @@ pub async fn settings_set(
         let days = settings.audit_ledger_retention_days;
         let _ = tauri::async_runtime::spawn_blocking(move || {
             if let Err(e) = crate::audit_ledger::prune_ledger(Some(days)) {
-                tracing::warn!(target: "grok_app::audit_ledger", "settings prune: {e}");
+                tracing::warn!(target: "supercharge_app::audit_ledger", "settings prune: {e}");
             }
         })
         .await;

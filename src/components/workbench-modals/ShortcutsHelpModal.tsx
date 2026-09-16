@@ -22,7 +22,6 @@ export function ShortcutsHelpModal(props: {
   platform: AppPlatform;
   composerSendKeyPref: ComposerSendKeyPref;
   shortcutRemaps: ShortcutRemapMap;
-  voiceHotkeyEnabled: boolean;
   onClose: () => void;
 }) {
   const tr = useMemo(() => createT(props.locale), [props.locale]);
@@ -36,16 +35,8 @@ export function ShortcutsHelpModal(props: {
 
   const groups = useMemo(
     () =>
-      shortcutsByGroup(
-        props.composerSendKeyPref,
-        props.shortcutRemaps,
-        props.voiceHotkeyEnabled,
-      ),
-    [
-      props.composerSendKeyPref,
-      props.shortcutRemaps,
-      props.voiceHotkeyEnabled,
-    ],
+      shortcutsByGroup(props.composerSendKeyPref, props.shortcutRemaps),
+    [props.composerSendKeyPref, props.shortcutRemaps],
   );
   const filtered = useMemo(
     () => filterShortcutGroups(query, groups, (key) => tr(key as MessageKey)),

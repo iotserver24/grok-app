@@ -1,4 +1,4 @@
-//! Message engine: ACL, slash commands, Grok turns, project/session bind.
+//! Message engine: ACL, slash commands, Supercharge turns, project/session bind.
 
 use super::app_sessions;
 use super::context::{
@@ -491,20 +491,13 @@ impl Engine {
                     }
                 }
             }
-            CardAction::Account { id } => {
-                // Callback data is user-controlled. Resolve only ids present in the
-                // persisted account index before any auth snapshot path is touched.
-                let listed = account_profiles::list_accounts();
-                if listed.profiles.iter().any(|account| account.id == id) {
-                    self.do_switch_account(&id, msg).await;
+            CardAction::Account { .. } => {
+                let text = if self.lang() == "en" {
+                    "Account switching is no longer available in Remote IM. Configure providers in the Supercharge desktop app."
                 } else {
-                    let t = if self.lang() == "en" {
-                        "Account not found. Send /account again."
-                    } else {
-                        "未找到账号。请重新发送 /account。"
-                    };
-                    let _ = self.reply_msg(msg, t).await;
-                }
+                    "Remote IM 已不再支持账号切换。请在 Supercharge 桌面应用中配置提供商。"
+                };
+                let _ = self.reply_msg(msg, text).await;
             }
             CardAction::Page { menu, page } => {
                 self.handle_telegram_page(&menu, page, &binding, &scope, msg)
@@ -562,38 +555,6 @@ impl Engine {
                     },
                 );
                 control_plane::build_telegram_session_card(&sessions, &self.lang(), page)
-            }
-            "account" => {
-                let listed = account_profiles::list_accounts();
-                let active_id = listed.active_id;
-                let profiles = listed.profiles;
-                if profiles.is_empty() {
-                    let t = if self.lang() == "en" {
-                        "No saved accounts yet. Add accounts in Grok App first."
-                    } else {
-                        "尚无已保存账号。请先在 Grok App 中添加账号。"
-                    };
-                    let _ = self.reply_msg(msg, t).await;
-                    return;
-                }
-                let lines = self
-                    .load_account_quota_lines(&profiles, active_id.as_deref())
-                    .await;
-                let text = format_account_menu(&lines, &self.lang());
-                let choices: Vec<(String, String)> = profiles
-                    .iter()
-                    .map(|account| (account.id.clone(), account.label.clone()))
-                    .collect();
-                self.insert_pending(
-                    scope,
-                    msg,
-                    PendingPick {
-                        kind: PickKind::Account,
-                        sessions: vec![],
-                        accounts: profiles,
-                    },
-                );
-                control_plane::build_telegram_account_card(&text, &choices, &self.lang(), page)
             }
             _ => return,
         };
@@ -707,27 +668,13 @@ impl Engine {
                 }
             },
             PickKind::Account => {
-                match account_profiles::resolve_account_pick(content, &pending.accounts) {
-                    Ok(id) => {
-                        self.clear_pending(scope, msg);
-                        self.do_switch_account(&id, msg).await;
-                    }
-                    Err(_) => {
-                        let t = if self.lang() == "en" {
-                            format!(
-                                "Invalid pick `{content}`. Send number (1–{}) or label, or 0 to cancel.",
-                                pending.accounts.len()
-                            )
-                        } else {
-                            format!(
-                                "无效选择 `{}`。请发送序号（1–{}）或标签，或 0 取消。",
-                                content.chars().take(40).collect::<String>(),
-                                pending.accounts.len()
-                            )
-                        };
-                        let _ = self.reply_msg(msg, &t).await;
-                    }
-                }
+                self.clear_pending(scope, msg);
+                let text = if self.lang() == "en" {
+                    "Account switching is no longer available in Remote IM. Configure providers in the Supercharge desktop app."
+                } else {
+                    "Remote IM 已不再支持账号切换。请在 Supercharge 桌面应用中配置提供商。"
+                };
+                let _ = self.reply_msg(msg, text).await;
             }
         }
     }
@@ -751,9 +698,9 @@ impl Engine {
         if let Some(q) = query {
             if profiles.is_empty() {
                 let t = if self.lang() == "en" {
-                    "No saved accounts yet. Sign in / add accounts in Grok App → Settings → Account, then try again."
+                    "No saved accounts yet. Sign in / add accounts in Supercharge → Settings → Account, then try again."
                 } else {
-                    "尚无已保存账号。请先在 Grok App「设置 → 账号」登录或添加账号后再试。"
+                    "尚无已保存账号。请先在 Supercharge「设置 → 账号」登录或添加账号后再试。"
                 };
                 let _ = self.reply_msg(msg, t).await;
                 return;
@@ -992,15 +939,18 @@ impl Engine {
             }
             BuiltinCommand::Status => {
                 let s = self.store.get_or_create(scope, default_wd);
-                let binary = grok_agent::resolve_grok_binary();
+                let binary = grok_agent::resolve_supercharge_binary();
                 let text = format!(
-                    "**Status**\n- project: `{}`\n- work_dir: `{}`\n- agent_session: `{}`\n- mode: {:?}\n- turns: {}\n- grok: `{}`\n- channel: `{}`",
+                    "**Status**\n- project: `{}`\n- work_dir: `{}`\n- agent_session: `{}`\n- mode: {:?}\n- turns: {}\n- supercharge: `{}`\n- channel: `{}`",
                     s.project_id.as_deref().unwrap_or("-"),
                     s.work_dir,
                     s.agent_session_id.as_deref().unwrap_or("-"),
                     s.pending_mode,
                     s.turn_count,
-                    binary.display(),
+                    binary
+                        .as_deref()
+                        .map(|path| path.display().to_string())
+                        .unwrap_or_else(|| "not found".into()),
                     msg.channel
                 );
                 let _ = self.reply_msg(msg, &text).await;
@@ -1029,8 +979,13 @@ impl Engine {
                 self.handle_resume(query.as_deref(), scope, msg, default_wd)
                     .await;
             }
-            BuiltinCommand::Account { query } => {
-                self.handle_account(query.as_deref(), scope, msg).await;
+            BuiltinCommand::Account { .. } => {
+                let text = if self.lang() == "en" {
+                    "Account switching is no longer available in Remote IM. Configure providers in the Supercharge desktop app."
+                } else {
+                    "Remote IM 已不再支持账号切换。请在 Supercharge 桌面应用中配置提供商。"
+                };
+                let _ = self.reply_msg(msg, text).await;
             }
             BuiltinCommand::Unknown { raw } => {
                 let t = if self.lang() == "en" {
@@ -1210,9 +1165,9 @@ impl Engine {
         let projects = self.scoped_projects_for(&msg.instance_id);
         if projects.is_empty() {
             let t = if self.lang() == "en" {
-                "No trusted projects in scope. Trust a folder in Grok App, or widen project scope in Remote control settings."
+                "No trusted projects in scope. Trust a folder in Supercharge, or widen project scope in Remote control settings."
             } else {
-                "当前范围内没有已信任项目。请先在 Grok App 中信任项目，或在远程控制设置中放宽项目范围。"
+                "当前范围内没有已信任项目。请先在 Supercharge 中信任项目，或在远程控制设置中放宽项目范围。"
             };
             let _ = self.reply_msg(msg, t).await;
             return;
@@ -1479,7 +1434,7 @@ impl Engine {
         .await;
 
         if result.cancelled || !active_turn.complete() {
-            tracing::info!(scope = %scope, "remote_im: grok turn cancelled");
+            tracing::info!(scope = %scope, "remote_im: Supercharge turn cancelled");
             return;
         }
 
@@ -1719,12 +1674,12 @@ fn format_quota_brief(billing: &crate::account::BillingSnapshot, lang: &str) -> 
 fn format_account_menu(lines: &[AccountQuotaLine], lang: &str) -> String {
     if lines.is_empty() {
         return if lang == "en" {
-            "No Grok account signed in, and no saved multi-account snapshots.\n\
-Sign in in Grok App → Settings → Account, then use **Add account** to save snapshots for switching."
+            "No Supercharge account signed in, and no saved multi-account snapshots.\n\
+Sign in to Supercharge → Settings → Account, then use **Add account** to save snapshots for switching."
                 .into()
         } else {
             "当前未登录，且没有已保存的多账号快照。\n\
-请先在 Grok App「设置 → 账号」登录，并用「添加账号」保存快照后再切换。"
+请先在 Supercharge「设置 → 账号」登录，并用「添加账号」保存快照后再切换。"
                 .into()
         };
     }
@@ -1732,10 +1687,10 @@ Sign in in Grok App → Settings → Account, then use **Add account** to save s
     let only_current = lines.len() == 1 && lines[0].account.id == "_current";
     let mut out: Vec<String> = Vec::new();
     if lang == "en" {
-        out.push("**Grok accounts & SuperGrok quota**".into());
+        out.push("**Supercharge accounts & SuperGrok quota**".into());
         out.push("".into());
     } else {
-        out.push("**Grok 账号与 SuperGrok 额度**".into());
+        out.push("**Supercharge 账号与 SuperGrok 额度**".into());
         out.push("".into());
     }
 
@@ -1791,13 +1746,13 @@ Sign in in Grok App → Settings → Account, then use **Add account** to save s
         if lang == "en" {
             out.push(
                 "Only the current CLI session is shown (no multi-account snapshots).\n\
-Add more accounts in Grok App → Settings → Account to enable `/account n` switching."
+Add more accounts in Supercharge → Settings → Account to enable `/account n` switching."
                     .into(),
             );
         } else {
             out.push(
                 "当前仅显示 CLI 登录账号（尚无多账号快照）。\n\
-在 Grok App「设置 → 账号」添加账号后，可用 `/account 序号` 切换。"
+在 Supercharge「设置 → 账号」添加账号后，可用 `/account 序号` 切换。"
                     .into(),
             );
         }

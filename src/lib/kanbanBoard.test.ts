@@ -42,7 +42,7 @@ function memoryStore(initial?: Record<string, string>): AgentKanbanStorage {
 }
 
 const projects = [
-  { id: "p1", name: "grok-app", path: "/Users/me/Code/grok-app" },
+  { id: "p1", name: "supercharge-app", path: "/Users/me/Code/supercharge-app" },
 ];
 
 function idsIn(
@@ -317,7 +317,7 @@ describe("buildAgentKanban (shipped buildTaskBoard path)", () => {
     });
     const groups = groupAgentKanbanByProject(board);
     expect(groups).toHaveLength(1);
-    expect(groups[0]!.name).toBe("grok-app");
+    expect(groups[0]!.name).toBe("supercharge-app");
     expect(groups[0]!.cards.map((c) => c.sessionId).sort()).toEqual(["a", "b"]);
   });
 });
@@ -384,7 +384,7 @@ describe("agent kanban surface is not a todo list", () => {
     expect(chrome).toContain('hash = "#/kanban"');
     expect(sidebar).toContain('tr("sidebar.kanban")');
     expect(workbench).toContain('mainPane === "kanban"');
-    expect(workbench).toContain("liveVoiceOpen ||");
+    expect(workbench).not.toContain("liveVoiceOpen");
     expect(workbench).toContain('mainPane === "kanban"');
     const liveWhen = workbench.slice(
       workbench.indexOf("liveMapEnabled:"),

@@ -6,7 +6,7 @@
 use crate::{
     cli_worktrees, commands, desktop_notify, git_pr_hub, leader, mirror, os_theme, pet_window,
     remote_im, serve, session_api, ssh_remote, system_fonts, theme_editor_window, tray, updater,
-    voice_host, wallpaper_grok_album, wallpaper_remote_commands,
+    wallpaper_remote_commands,
 };
 
 /// Single invoke handler consumed by `Builder::invoke_handler` in `run()`.
@@ -174,7 +174,7 @@ pub fn app_invoke_handler(
         commands::secrets_get_masked,
         commands::secrets_set,
         commands::provider_ping,
-        // ── Grok CLI / Go config import ──
+        // ── Supercharge CLI / Go config import ──
         commands::import_grok_cli_config,
         commands::import_grok_go_config,
         // ── Doctor, diagnostics, audit ledger & export ──
@@ -337,20 +337,8 @@ pub fn app_invoke_handler(
         commands::schedules_launch_agent_status,
         commands::schedules_launch_agent_set_enabled,
         commands::schedules_launch_agent_reveal_helper,
-        // ── Accounts, quota & transcript import ──
+        // ── Local CLI status & transcript import ──
         commands::account_status,
-        commands::account_login,
-        commands::account_login_cancel,
-        commands::account_login_submit_code,
-        commands::account_logout,
-        commands::account_open_usage,
-        commands::account_open_subscribe,
-        commands::accounts_list,
-        commands::accounts_quota,
-        commands::account_save_current,
-        commands::account_switch,
-        commands::account_remove,
-        commands::account_rename,
         commands::session_import_transcript,
         commands::session_import_transcript_file,
         // ── Providers, aux models & editors ──
@@ -371,15 +359,6 @@ pub fn app_invoke_handler(
         commands::models_aux_reset_defaults,
         commands::models_aux_headless,
         commands::models_aux_web_search,
-        commands::official_aux_status,
-        commands::official_aux_ensure_home,
-        commands::official_aux_dispatch,
-        commands::official_aux_web_search,
-        commands::official_aux_x_keyword_search,
-        commands::official_aux_x_semantic_search,
-        commands::official_aux_x_user_search,
-        commands::official_aux_x_thread_fetch,
-        commands::official_aux_vision_describe,
         commands::editors_list,
         commands::open_in_editor,
         // ── Mobile web mirror ──
@@ -390,13 +369,6 @@ pub fn app_invoke_handler(
         mirror::mirror_set_allow_lan,
         mirror::mirror_start,
         mirror::mirror_stop,
-        // ── Voice host ──
-        voice_host::voice_state,
-        voice_host::voice_start,
-        voice_host::voice_stop,
-        voice_host::voice_push_pcm,
-        voice_host::voice_invoke_tool,
-        voice_host::voice_dictation_transcribe,
         // ── Remote IM bridge ──
         remote_im::remote_im_bridge_status,
         remote_im::remote_im_bridge_start,
@@ -418,33 +390,13 @@ pub fn app_invoke_handler(
         wallpaper_remote_commands::wallpaper_remote_thumbnail,
         wallpaper_remote_commands::wallpaper_remote_cancel_media_requests,
         wallpaper_remote_commands::wallpaper_remote_cancel_all_media_requests,
-        // ── Wallpaper: X search, imagine & library ──
-        commands::wallpaper_x_search,
-        commands::wallpaper_x_search_cancel,
-        commands::wallpaper_x_search_more,
-        commands::wallpaper_fetch_media,
-        commands::wallpaper_imagine,
-        commands::wallpaper_image_to_video,
-        commands::wallpaper_image_to_video_cancel,
-        commands::wallpaper_image_edit,
-        commands::wallpaper_imagine_recover_catalog,
-        commands::wallpaper_imagine_pending_recoveries,
-        commands::wallpaper_import_image,
+        // ── Wallpaper: local library ──
         commands::wallpaper_library_list,
         commands::wallpaper_library_page,
         commands::wallpaper_library_remember,
         commands::wallpaper_library_lookup,
         commands::wallpaper_library_find_by_id,
         commands::wallpaper_library_delete,
-        // ── Wallpaper: Grok album ──
-        wallpaper_grok_album::wallpaper_grok_album_open,
-        wallpaper_grok_album::wallpaper_grok_album_snapshot,
-        wallpaper_grok_album::wallpaper_grok_album_refresh,
-        wallpaper_grok_album::wallpaper_grok_album_load_more,
-        wallpaper_grok_album::wallpaper_grok_album_thumbnail,
-        wallpaper_grok_album::wallpaper_grok_album_cancel_requests,
-        wallpaper_grok_album::wallpaper_grok_album_cancel_all_requests,
-        wallpaper_grok_album::wallpaper_grok_album_fetch_media,
         // ── Appearance skins ──
         commands::skin_pick_open,
         commands::skin_pick_save,
@@ -475,14 +427,9 @@ pub fn app_invoke_handler(
         commands::skin_sources_set_enabled,
         commands::skin_import_take_pending,
         commands::skin_pack_fetch_url,
-        // ── Streaming probe, batch agents & X evidence ──
+        // ── Streaming probe & batch agents ──
         commands::streaming_messages_json_probe,
         commands::batch_agents_headless,
-        commands::x_evidence_search,
-        commands::x_evidence_list,
-        commands::x_evidence_get,
-        commands::x_evidence_stats,
-        commands::x_quote_pack,
         commands::path_exists_many,
         // ── Terminal PTY ──
         commands::terminal_pty_spawn,

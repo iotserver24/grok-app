@@ -3,7 +3,7 @@
  * Default matches current product: spellcheck off.
  */
 
-export const COMPOSER_SPELLCHECK_KEY = "grok.composerSpellcheck";
+export const COMPOSER_SPELLCHECK_KEY = "supercharge.composerSpellcheck";
 
 /** Fired on `window` after a same-tab preference save (storage events are cross-tab only). */
 export const COMPOSER_SPELLCHECK_CHANGED_EVENT = "grok:composerSpellcheck";

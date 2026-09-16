@@ -109,7 +109,6 @@ export function AppearanceSection() {
     onGoalOrchUiEnabled,
     onMessageActionsVisibility,
     onMessageTimeFormat,
-    onSection,
     onShowMessageTimestamps,
     onShowReplyLength,
     onReplaceProviderBrandLogo,
@@ -598,7 +597,7 @@ export function AppearanceSection() {
                             type="button"
                             className="btn btn--solid btn--sm"
                             disabled={wallpaperBusy}
-                            onClick={() => openWallpaperSource("x")}
+                            onClick={() => openWallpaperSource("web")}
                           >
                             <IconSearch size={14} aria-hidden />
                             {t("settings.wallpaperFind")}
@@ -737,10 +736,6 @@ export function AppearanceSection() {
                         initialTab={wallpaperSourceTab}
                         t={t}
                         onPickFile={(file) => onWallpaperFile(file)}
-                        onRequestLogin={() => {
-                          setWallpaperSourceOpen(false);
-                          onSection("account");
-                        }}
                       />
                       {wallpaperUrl &&
                       onWallpaperAdjust &&

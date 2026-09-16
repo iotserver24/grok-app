@@ -167,9 +167,9 @@ export const PLUGIN_MARKET_ERROR_HINT_FALLBACK: Record<
   PluginMarketErrorKind,
   string
 > = {
-  cli_missing: "Install or path the Grok CLI in Settings → Runtime, then retry.",
+  cli_missing: "Install or path the Supercharge CLI in Settings → Runtime, then retry.",
   cli_too_old:
-    "Update Grok CLI (`grok update`) and fully restart the app, then retry.",
+    "Update Supercharge CLI (`supercharge update`) and fully restart the app, then retry.",
   network: "Check your connection and refresh the catalog.",
   offline: "You appear offline — reconnect and refresh the catalog.",
   timeout: "The CLI timed out — retry or refresh sources.",

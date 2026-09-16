@@ -36,7 +36,6 @@ import type { MessageTimeFormat } from "@/lib/messageTimeFormatPref";
 import type { ThemeSkinId, WallpaperClip, WallpaperFocus, WallpaperKind, WallpaperRecord } from "@/lib/themeSkin";
 import type { WallpaperFocusApplyResult } from "@/components/WallpaperFocusEditor";
 import type { ComposerPrefsScope, ModelOption, PermissionPolicyId } from "@/lib/grokCatalog";
-import type { AccountStatus } from "@/lib/api";
 import type { CostRollupProjectMeta, CostRollupSessionMeta } from "@/lib/costRollup";
 import type { ArchiveAgeSessionLike } from "@/lib/sessionArchiveAge";
 import type { TodoGateFireSignal } from "@/lib/todoGate";
@@ -226,11 +225,8 @@ export interface SettingsPageProps {
   onWorkflowsEnabled?: (v: boolean) => void;
   useLeader?: boolean;
   onUseLeader?: (v: boolean) => void;
-  voiceId?: string;
-  onVoiceId?: (v: string) => void;
   voiceDictationAutoSend?: boolean;
   onVoiceDictationAutoSend?: (v: boolean) => void;
-  voiceKeepAgentsOnEnd?: boolean;
   sttEngine?: string;
   onSttEngine?: (v: string) => void;
   sttCustomBaseUrl?: string;
@@ -245,7 +241,6 @@ export interface SettingsPageProps {
    */
   sttZhScript?: string;
   onSttZhScript?: (v: string) => void;
-  onVoiceKeepAgentsOnEnd?: (v: boolean) => void;
   storeApiKeysInKeychain?: boolean;
   onStoreApiKeysInKeychain?: (v: boolean) => void;
   sandboxProfile?: string;
@@ -283,28 +278,6 @@ export interface SettingsPageProps {
   costRollupSessions?: readonly CostRollupSessionMeta[];
   costRollupProjects?: readonly CostRollupProjectMeta[];
   versionFooter: string;
-  account: AccountStatus | null;
-  accountLoading: boolean;
-  accountBusy: boolean;
-  accountHeatmapError?: unknown;
-  accountProbeError?: unknown;
-  loginHint?: string | null;
-  savedAccounts?: import("@/lib/api").SavedAccount[];
-  activeAccountId?: string | null;
-  onAccountLoginOauth: () => void;
-  onAccountLoginDevice: () => void;
-  /** Paste browser verification code into running grok login. */
-  onAccountLoginSubmitCode?: (code: string) => void;
-  onCancelLogin: () => void;
-  onAccountLogout: () => void;
-  onAccountRefresh: () => void;
-  onAccountManageUsage: () => void;
-  onAccountSubscribe: () => void;
-  onSaveAccount?: () => void;
-  onAddAccount?: () => void;
-  onSwitchAccount?: (id: string) => void;
-  onRemoveAccount?: (id: string) => void;
-  onImportChat?: () => void;
   defaultOpenTarget?: string;
   onDefaultOpenTarget?: (v: string) => void;
   onProvidersChanged?: () => void;
@@ -437,7 +410,6 @@ export type SettingsViewModel = SettingsPageProps & {
   setChatVirtualScroll: Dispatch<SetStateAction<boolean>>;
   setFilePathCardBasename: Dispatch<SetStateAction<boolean>>;
   setTranscriptFilter: Dispatch<SetStateAction<TranscriptFilterMode>>;
-  setVoiceHotkeyEnabled: Dispatch<SetStateAction<boolean>>;
   setWallpaperError: Dispatch<SetStateAction<string | null>>;
   setWallpaperFocusOpen: Dispatch<SetStateAction<boolean>>;
   setWallpaperSourceOpen: Dispatch<SetStateAction<boolean>>;
@@ -457,7 +429,6 @@ export type SettingsViewModel = SettingsPageProps & {
   transcriptFilter: TranscriptFilterMode;
   trayBusySurface: TrayBusyBadgeSurface;
   uiFontFamily: string;
-  voiceHotkeyEnabled: boolean;
   wallpaperBusy: boolean;
   wallpaperError: string | null;
   wallpaperFocusOpen: boolean;

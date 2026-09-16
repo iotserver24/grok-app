@@ -295,9 +295,9 @@ pub fn pick_session<'a>(
 pub fn format_project_menu(projects: &[TrustedProject], lang: &str) -> String {
     if projects.is_empty() {
         return if lang == "en" {
-            "No trusted projects. Trust a folder in Grok App first.".into()
+            "No trusted projects. Trust a folder in Supercharge App first.".into()
         } else {
-            "没有已信任项目。请先在 Grok App 中信任项目目录。".into()
+            "没有已信任项目。请先在 Supercharge App 中信任项目目录。".into()
         };
     }
     let mut lines = vec![if lang == "en" {
@@ -924,7 +924,7 @@ pub fn grok_turn_cli_args_full(
     if always_approve {
         args.push("--always-approve".into());
     }
-    // Grok Build CLI: plain | json | streaming-json | streaming-messages-json.
+    // Supercharge CLI: plain | json | streaming-json | streaming-messages-json.
     let fmt = output_format.trim();
     let fmt = if fmt.is_empty() {
         "streaming-json"

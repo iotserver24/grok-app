@@ -9,7 +9,7 @@
 
 export type ChatDensity = "comfortable" | "compact";
 
-export const CHAT_DENSITY_STORAGE_KEY = "grok.chatDensity";
+export const CHAT_DENSITY_STORAGE_KEY = "supercharge.chatDensity";
 export const DEFAULT_CHAT_DENSITY: ChatDensity = "comfortable";
 export const CHAT_DENSITY_ATTR = "data-chat-density";
 

@@ -14,7 +14,7 @@ use crate::agent_home_config::{set_top_level_bool, update_config_toml_if_indepen
 pub const SUBAGENT_WT_SNAP_MIN_CLI: (u64, u64, u64) = (0, 2, 117);
 
 pub const CONFIG_KEY: &str = "subagent_worktree_snapshot_enabled";
-pub const ENV_KEY: &str = "GROK_SUBAGENT_WORKTREE_SNAPSHOT";
+pub const ENV_KEY: &str = "SUPERCHARGE_SUBAGENT_WORKTREE_SNAPSHOT";
 
 /// Normalize enable toggle (App default off).
 #[allow(dead_code)]

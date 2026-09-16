@@ -99,7 +99,7 @@ pub enum AcpEvent {
     /// Turn / context usage reported by the agent (when present).
     /// Prefer occupancy fields over UI char heuristics.
     ///
-    /// Grok Build CLI occupancy (same as `/session-info` / auto-compact):
+    /// Supercharge CLI occupancy (same as `/session-info` / auto-compact):
     ///   tokens_used / context_window → percentage
     /// Streamed as `params._meta.totalTokens` or `auto_compact_started.tokens_used`.
     /// Do **not** treat `turn_completed.usage.totalTokens` as occupancy (billing sum).
@@ -202,7 +202,6 @@ struct Pending {
 }
 
 const HANDSHAKE_TIMEOUT_SECS: u64 = 45;
-const AUTH_TIMEOUT_SECS: u64 = 12;
 /// Max wait for a single stdin write (JSON-RPC line). A wedged agent with a full
 /// pipe used to block forever here — which froze interject ("引导"), cancel, and
 /// any other Host→agent RPC before the request-level timeout could start.
@@ -397,22 +396,22 @@ pub struct SpawnOptions {
     /// Effective OS sandbox profile (`off` / `workspace` / …).
     /// When set, overrides `AppSettings.sandbox_profile` for this spawn.
     pub sandbox_profile: Option<String>,
-    /// Optional JSON Schema for structured output (`grok --json-schema` top-level).
+    /// Optional JSON Schema for structured output (`supercharge --json-schema` top-level).
     /// When set, the model is constrained to produce matching JSON. Safe with
     /// `agent stdio` (verified: process stays up; ACP framing intact).
     pub json_schema: Option<String>,
     /// Session-only plugin directories → `grok agent --plugin-dir <DIR>` (repeatable).
     pub plugin_dirs: Vec<String>,
-    /// Per-session extra rules → top-level `grok --rules <TEXT>` (before `agent`).
+    /// Per-session extra rules → top-level `supercharge --rules <TEXT>` (before `agent`).
     pub extra_rules: Option<String>,
-    /// Per-session max turns override → top-level `grok --max-turns N`.
+    /// Per-session max turns override → top-level `supercharge --max-turns N`.
     /// When set (after normalize), wins over `AppSettings.max_agent_turns`.
     pub max_agent_turns: Option<u32>,
     /// Per-session system prompt override → top-level
-    /// `grok --system-prompt-override <TEXT>` (before `agent`).
+    /// `supercharge --system-prompt-override <TEXT>` (before `agent`).
     /// Never log the full value (may contain secrets / PII).
     pub system_prompt_override: Option<String>,
-    /// Per-session override for top-level `grok --no-ask-user` (CLI ≥ 0.2.117).
+    /// Per-session override for top-level `supercharge --no-ask-user` (CLI ≥ 0.2.117).
     /// `Some(true|false)` wins over `AppSettings.no_ask_user`; `None` inherits.
     pub no_ask_user: Option<bool>,
     /// CLI `--fork-session` semantics: on open, fork the resume agent session
@@ -424,12 +423,12 @@ pub struct SpawnOptions {
     /// mix with a custom DeepSeek main process.
     pub grok_home_override: Option<std::path::PathBuf>,
     /// When true, `session/new` injects empty `mcpServers` (official side jobs
-    /// must not re-inject the `official-aux` MCP that shells out to `grok -p`).
+    /// must not re-inject the `official-aux` MCP that shells out to `supercharge -p`).
     pub empty_mcp_servers: bool,
     /// OpenSSH Host alias. When set, spawn `ssh -T` and run grok on that host
     /// (remote cwd). Do not treat `cwd` as a local `std::fs` path.
     pub ssh_alias: Option<String>,
-    /// When true, pass top-level `grok --trust` so headless ACP loads project
+    /// When true, pass top-level `supercharge --trust` so headless ACP loads project
     /// instructions (AGENTS.md) and project skills for an App-trusted folder.
     pub folder_trust: bool,
 }
@@ -521,7 +520,7 @@ impl AcpClient {
         let cli_path = if let Some(ref w) = wsl_launch {
             crate::wsl_backend::wsl_display_path(w)
         } else if ssh_alias.is_some() {
-            std::path::PathBuf::from("grok")
+            std::path::PathBuf::from("supercharge")
         } else {
             cli_path
         };
@@ -555,7 +554,7 @@ impl AcpClient {
                 return Err(AgentError::new(
                     AgentErrorCode::CliTooOld,
                     format!(
-                        "grok CLI {} is older than the required {}",
+                        "Supercharge CLI {} is older than the required {}",
                         crate::cli_probe::extract_version_token(raw)
                             .unwrap_or_else(|| raw.trim().to_string()),
                         crate::cli_probe::min_cli_version_str()
@@ -570,7 +569,7 @@ impl AcpClient {
         // so nested tools (npx, node, git) resolve when the agent shells out.
         //
         // Flag placement (CLI 0.2.x):
-        //   top-level: `grok --no-auto-update --permission-mode <MODE> [--sandbox …] agent …`
+        //   top-level: `supercharge --no-auto-update --permission-mode <MODE> [--sandbox …] agent …`
         //   agent opts: `--model` / `--reasoning-effort` / `--always-approve` before `stdio`
         //   Flags after `stdio` are rejected (`unexpected argument '--model'`).
         //   `--permission-mode` is top-level `grok` only — not under `grok agent`.
@@ -615,7 +614,7 @@ impl AcpClient {
         }
 
         // Composer may hold a catalog id while the active channel is a custom
-        // provider — resolve to the route id Grok Build actually understands.
+        // provider — resolve to the route id Supercharge actually understands.
         // Override home (official aux): pass model id through as catalog id.
         let grok_build_proxy = if ssh_alias.is_some() || home_override.is_some() {
             None
@@ -623,27 +622,22 @@ impl AcpClient {
             crate::providers::active_grok_build_proxy_spawn(opts.model_id.as_deref().unwrap_or(""))
         };
         let spawn_model = if ssh_alias.is_some() {
-            let m = opts.model_id.as_deref().unwrap_or("").trim();
-            if m.is_empty() || crate::providers::is_custom_provider_id(m) {
-                crate::providers::OFFICIAL_CATALOG_MODEL.to_string()
+            let requested = opts.model_id.as_deref().unwrap_or("").trim();
+            if requested.is_empty() || crate::providers::is_custom_provider_id(requested) {
+                String::new()
             } else {
-                m.to_string()
+                requested.to_string()
             }
         } else if let Some(ref native) = grok_build_proxy {
             native.model.clone()
         } else if home_override.is_some() {
-            let m = opts.model_id.as_deref().unwrap_or("").trim();
-            if m.is_empty() {
-                crate::providers::OFFICIAL_CATALOG_MODEL.to_string()
-            } else {
-                m.to_string()
-            }
+            opts.model_id.as_deref().unwrap_or("").trim().to_string()
         } else {
             crate::providers::agent_spawn_model_id(opts.model_id.as_deref().unwrap_or(""))
         };
 
         // Flag placement (CLI 0.2.x):
-        //   top-level: `grok --no-auto-update --permission-mode <MODE> [--sandbox PROFILE] agent …`
+        //   top-level: `supercharge --no-auto-update --permission-mode <MODE> [--sandbox PROFILE] agent …`
         //   agent opts: `--model` / `--reasoning-effort` / `--always-approve` before `stdio`
         // Skip background update checks so ACP handshakes are not delayed on launch.
         // `--sandbox` / `--permission-mode` are top-level only (not under `grok agent`);
@@ -764,7 +758,7 @@ impl AcpClient {
         // argv after `bash -lc` is not a real argv array on the host.
         // (env vars set on the Windows process and forwarded via WSLENV).
         let mut cmd = if ssh_alias.is_some() {
-            Command::new("grok")
+            Command::new("supercharge")
         } else if let Some(ref w) = wsl_launch {
             let linux_cwd = crate::wsl_backend::windows_path_to_wsl(&cwd).map_err(|e| {
                 AgentError::new(
@@ -808,7 +802,7 @@ impl AcpClient {
         for a in &bg_wait_args {
             cmd.arg(a);
         }
-        // Top-level `grok --json-schema <SCHEMA>` (before `agent`). Constrains
+        // Top-level `supercharge --json-schema <SCHEMA>` (before `agent`). Constrains
         // model output; headless docs mention --output-format json, but ACP
         // stdio still accepts the flag and keeps the process alive.
         if let Some(ref schema) = opts.json_schema {
@@ -818,12 +812,12 @@ impl AcpClient {
                 cmd.arg(s);
             }
         }
-        // Top-level `grok --rules <RULES>` (before `agent`) — session-only
+        // Top-level `supercharge --rules <RULES>` (before `agent`) — session-only
         // system-prompt append; not accepted under `grok agent` / `stdio`.
         for a in extra_rules_spawn_flags(opts.extra_rules.as_deref()) {
             cmd.arg(a);
         }
-        // Top-level `grok --system-prompt-override <PROMPT>` (before `agent`) —
+        // Top-level `supercharge --system-prompt-override <PROMPT>` (before `agent`) —
         // session-only full system prompt replacement (alias: --system-prompt).
         // Do not log the prompt body (may contain secrets / PII).
         for a in system_prompt_override_spawn_flags(opts.system_prompt_override.as_deref()) {
@@ -832,7 +826,7 @@ impl AcpClient {
         for f in disable_web_search_spawn_flags(disable_web) {
             cmd.arg(f);
         }
-        // Top-level `grok --no-ask-user` (before `agent`) — disables ask-user
+        // Top-level `supercharge --no-ask-user` (before `agent`) — disables ask-user
         // questionnaires for this process (CLI ≥ 0.2.117).
         for f in no_ask_user_spawn_flags(no_ask_user) {
             cmd.arg(f);
@@ -843,7 +837,7 @@ impl AcpClient {
         for a in disallowed_tools_spawn_flags(&disallowed_tools) {
             cmd.arg(a);
         }
-        // Top-level `grok --todo-gate` (CLI 0.2.117+). Overrides remote
+        // Top-level `supercharge --todo-gate` (CLI 0.2.117+). Overrides remote
         // todo_gate_enabled and the built-in default (false). Max fires is
         // config-only (independent agent-home); no CLI flag.
         crate::agent_todo_gate::apply_todo_gate_to_command(&mut cmd, todo_gate_enabled);
@@ -855,7 +849,7 @@ impl AcpClient {
                 cmd.arg(a);
             }
         }
-        // Top-level `grok --agents <JSON>` — inline subagent defs; empty omits.
+        // Top-level `supercharge --agents <JSON>` — inline subagent defs; empty omits.
         // Does not write into shared ~/.grok (spawn argv only).
         if let Some(ref aa) = agents_json_args {
             for a in aa {
@@ -948,7 +942,7 @@ impl AcpClient {
             }
         }
         if ssh_alias.is_none() {
-            cmd.env("GROK_HOME", &grok_home);
+            cmd.env("SUPERCHARGE_HOME", &grok_home);
         }
         if let Some(ref native) = grok_build_proxy {
             apply_grok_build_proxy_env(&mut cmd, native);
@@ -967,8 +961,8 @@ impl AcpClient {
         // via session mcpServers (official-aux / Extensions). Opt back in with
         // official_aux_with_user_mcp (Extensions MCPs), not Claude dump.
         // Grok docs: GROK_CLAUDE_MCPS_ENABLED / GROK_CURSOR_MCPS_ENABLED.
-        cmd.env("GROK_CLAUDE_MCPS_ENABLED", "false");
-        cmd.env("GROK_CURSOR_MCPS_ENABLED", "false");
+        cmd.env("SUPERCHARGE_CLAUDE_MCPS_ENABLED", "false");
+        cmd.env("SUPERCHARGE_CURSOR_MCPS_ENABLED", "false");
         // Route agent traffic through the configured proxy (NEW-02). Windows
         // system proxy is registry-only and never reaches children as env vars.
         crate::proxy::apply_to_tokio_command(&mut cmd);
@@ -1012,7 +1006,10 @@ impl AcpClient {
             } else {
                 AgentErrorCode::CliNotFound
             };
-            AgentError::new(code, format!("failed to spawn grok agent stdio: {e}"))
+            AgentError::new(
+                code,
+                format!("failed to spawn Supercharge agent stdio: {e}"),
+            )
         })?;
 
         // Capture PID before pipes / reader tasks take ownership of the child.
@@ -1398,7 +1395,7 @@ impl AcpClient {
                 return;
             }
 
-            // Grok Build plan gate / ask-user (wire method has leading `_`).
+            // Supercharge plan gate / ask-user (wire method has leading `_`).
             // Params are FLAT: { sessionId, toolCallId, planContent } — not nested.
             // See minos grok_driver + agent-client-protocol ext_method.
             if let Some(bare) = method.strip_prefix('_') {
@@ -1762,7 +1759,7 @@ pub fn parse_usage_update(kind: &str, update: &Value) -> Option<AcpEvent> {
             "output",
         ],
     );
-    // Grok Build CLI occupancy field is `tokens_used` (auto_compact_started,
+    // Supercharge CLI occupancy field is `tokens_used` (auto_compact_started,
     // tokens_used updates). Prefer it over billing `totalTokens` when both exist
     // on the same object (should not happen on live wire).
     let occupancy = json_token_u64(
@@ -2217,65 +2214,16 @@ impl AcpClient {
         );
         *self.rewind_supported.lock() = initialize_advertises_rewind(&init);
 
-        // Live per-model context windows (ClaudeCode `_meta.modelState`).
-        // Soft-fail silently when absent — Grok CLI does not expose this yet.
-        let live_windows = parse_model_context_tokens(&init);
-        if !live_windows.is_empty() {
-            let n = live_windows.len();
-            crate::models_catalog::merge_live_context_windows(live_windows);
-            debug!("acp initialize merged {n} live context window(s)");
+        if init.pointer("/_meta/modelState").is_some() {
+            let (live_models, current_model_id) = parse_live_models(&init);
+            let count = live_models.len();
+            crate::models_catalog::merge_live_models(live_models, current_model_id);
+            debug!("acp initialize merged {count} live model(s)");
         }
 
-        // Best-effort cached auth — short timeout so a hung auth cannot burn 120s.
-        // Official independent mode: if the first attempt fails (stale/empty
-        // agent-home after a custom-route clear, #528), re-sync ~/.grok →
-        // agent-home and retry once before soft-continuing.
-        //
-        // Custom relays must skip this: `cached_token` reads ~/.grok/auth.json
-        // (still present after official login for billing). Grok Build then
-        // sends OIDC to the relay and the user sees “works until I sign in”.
-        //
-        // Unsigned-in official route must also skip: there is no token to
-        // load, and the CLI authenticate RPC times out at 12s × 2.
-        let has_cached_token = has_cached_token_for_authenticate();
-        if should_authenticate_cached_token(self.custom_route, has_cached_token) {
-            match self
-                .request_timeout(
-                    "authenticate",
-                    json!({ "methodId": "cached_token" }),
-                    AUTH_TIMEOUT_SECS,
-                )
-                .await
-            {
-                Ok(_) => info!("acp authenticate cached_token ok"),
-                Err(e) => {
-                    if let Err(sync_e) = crate::account::sync_cli_auth_to_agent_home() {
-                        warn!("acp authenticate: re-sync auth before retry failed: {sync_e}");
-                    }
-                    match self
-                        .request_timeout(
-                            "authenticate",
-                            json!({ "methodId": "cached_token" }),
-                            AUTH_TIMEOUT_SECS,
-                        )
-                        .await
-                    {
-                        Ok(_) => {
-                            info!("acp authenticate cached_token ok after auth re-sync");
-                        }
-                        Err(e2) => {
-                            warn!(
-                                "acp authenticate soft-fail after re-sync (continuing): first={e}; retry={e2}"
-                            );
-                        }
-                    }
-                }
-            }
-        } else if self.custom_route {
-            info!("acp authenticate skipped (custom route: api_key only)");
-        } else {
-            info!("acp authenticate skipped (unsigned-in: no cached_token)");
-        }
+        // Supercharge resolves its configured provider and cached credentials
+        // during initialization. Do not force a legacy auth method from the
+        // desktop: doing so can override a provider API key or stall setup.
         Ok(init)
     }
 
@@ -2374,7 +2322,7 @@ impl AcpClient {
                     let _ = self.event_tx.send((
                         None,
                         AcpEvent::State {
-                            backend: "grok_agent_stdio".into(),
+                            backend: "supercharge_agent_stdio".into(),
                             agent_session_id: Some(sid.clone()),
                             model_id,
                         },
@@ -2419,7 +2367,7 @@ impl AcpClient {
                         let _ = self.event_tx.send((
                             None,
                             AcpEvent::State {
-                                backend: "grok_agent_stdio".into(),
+                                backend: "supercharge_agent_stdio".into(),
                                 agent_session_id: Some(sid.clone()),
                                 model_id,
                             },
@@ -2470,7 +2418,7 @@ impl AcpClient {
         let _ = self.event_tx.send((
             None,
             AcpEvent::State {
-                backend: "grok_agent_stdio".into(),
+                backend: "supercharge_agent_stdio".into(),
                 agent_session_id: Some(sid.clone()),
                 model_id,
             },
@@ -2517,7 +2465,7 @@ impl AcpClient {
             }
         }
 
-        // Grok Build extension (vscode / older agents): sourceSessionId + sourceCwd + newCwd.
+        // Supercharge extension (vscode / older agents): sourceSessionId + sourceCwd + newCwd.
         match self
             .request_timeout(
                 "_x.ai/session/fork",
@@ -2621,7 +2569,7 @@ impl AcpClient {
             let _ = self.event_tx.send((
                 None,
                 AcpEvent::State {
-                    backend: "grok_agent_stdio".into(),
+                    backend: "supercharge_agent_stdio".into(),
                     agent_session_id: Some(sid),
                     model_id: Some(mid.to_string()),
                 },
@@ -2630,7 +2578,7 @@ impl AcpClient {
             let _ = self.event_tx.send((
                 None,
                 AcpEvent::State {
-                    backend: "grok_agent_stdio".into(),
+                    backend: "supercharge_agent_stdio".into(),
                     agent_session_id: Some(sid),
                     model_id: Some(model_id.to_string()),
                 },
@@ -2771,7 +2719,7 @@ impl AcpClient {
 
     /// Inject guidance into the active prompt without cancelling the turn.
     ///
-    /// Grok Build soft-steer (not cancel-and-send). Wire method names:
+    /// Supercharge soft-steer (not cancel-and-send). Wire method names:
     /// - CLI agent / TUI: `x.ai/interject` (canonical on grok 1.0.x)
     /// - Older / reverse-RPC style: `_x.ai/interject`
     ///
@@ -3097,9 +3045,9 @@ pub enum AskUserOutcome {
 pub fn wire_initialize_params() -> Value {
     json!({
         "protocolVersion": 1,
-        "clientInfo": { "name": "grok-app", "version": "0.1.0" },
-        "capabilities": {
-            "meta": {
+        "clientInfo": { "name": "supercharge-desktop", "version": env!("CARGO_PKG_VERSION") },
+        "clientCapabilities": {
+            "_meta": {
                 // Long-running bash/terminal commands stream incremental
                 // output back to the client instead of sitting silent — the
                 // UI shows progress instead of looking stalled.
@@ -3107,36 +3055,71 @@ pub fn wire_initialize_params() -> Value {
                 // Bash output without ANSI color codes (cleaner line dumps).
                 "x.ai/bashOutputNoColor": true
             }
+        },
+        "_meta": {
+            "clientType": "supercharge-desktop",
+            "clientIdentifier": "supercharge-desktop",
+            "clientVersion": env!("CARGO_PKG_VERSION")
         }
     })
 }
 
-/// Extract per-model context window sizes from the `initialize` result's
-/// `_meta.modelState.availableModels[].totalContextTokens` array.
-///
-/// ClaudeCode exposes live windows there; Grok CLI may not (soft-fail → empty).
-/// Returned map is merged into `models_catalog` so the UI can show
-/// "% of context used" without hardcoding per-model sizes.
-pub fn parse_model_context_tokens(init: &Value) -> HashMap<String, u64> {
-    let mut out = HashMap::new();
-    let Some(models) = init
-        .pointer("/_meta/modelState/availableModels")
-        .and_then(|v| v.as_array())
+/// Parse the provider-neutral model catalog from the ACP `initialize` result.
+/// Unknown model metadata is ignored so newer agents remain compatible.
+pub fn parse_live_models(
+    init: &Value,
+) -> (Vec<crate::models_catalog::AvailableModel>, Option<String>) {
+    let state = init.pointer("/_meta/modelState");
+    let current = state
+        .and_then(|value| value.get("currentModelId"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(ToString::to_string);
+    let Some(models) = state
+        .and_then(|value| value.get("availableModels"))
+        .and_then(Value::as_array)
     else {
-        return out;
+        return (Vec::new(), current);
     };
-    for m in models {
-        let Some(id) = m.get("modelId").and_then(|v| v.as_str()) else {
-            continue;
-        };
-        if let Some(tokens) = m
-            .pointer("/_meta/totalContextTokens")
-            .and_then(|v| v.as_u64())
-        {
-            out.insert(id.to_string(), tokens);
-        }
-    }
-    out
+
+    let parsed = models
+        .iter()
+        .filter_map(|model| {
+            let id = model.get("modelId")?.as_str()?.trim();
+            if id.is_empty() {
+                return None;
+            }
+            let label = model
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .unwrap_or(id)
+                .to_string();
+            let context_window = model
+                .pointer("/_meta/totalContextTokens")
+                .and_then(Value::as_u64);
+            Some(crate::models_catalog::AvailableModel {
+                id: id.to_string(),
+                label,
+                source: "live".into(),
+                is_default: current.as_deref() == Some(id),
+                reasoning_efforts: Vec::new(),
+                context_window,
+            })
+        })
+        .collect();
+    (parsed, current)
+}
+
+/// Compatibility view used by older unit tests and context-only consumers.
+pub fn parse_model_context_tokens(init: &Value) -> HashMap<String, u64> {
+    parse_live_models(init)
+        .0
+        .into_iter()
+        .filter_map(|model| model.context_window.map(|tokens| (model.id, tokens)))
+        .collect()
 }
 
 /// Host → agent `session/prompt` params.
@@ -3308,7 +3291,7 @@ pub fn decode_permission_request(rpc_id: u64, params: &Value) -> AcpEvent {
         .map(|s| s.to_string())
         .filter(|s| !s.is_empty() && s != "tool")
         .or_else(|| {
-            // Title is often the tool id for Grok Build tools.
+            // Title is often the tool id for Supercharge tools.
             let t = title.trim();
             if !t.is_empty() && t != "Tool permission" && !t.contains(' ') && t.contains('_') {
                 Some(t.to_string())
@@ -3673,7 +3656,7 @@ pub fn decode_session_update(params: &Value) -> Vec<AcpEvent> {
                 status,
             });
         }
-        // CLI occupancy + compact lifecycle (Grok Build 0.2.x wire).
+        // CLI occupancy + compact lifecycle (Supercharge 0.2.x wire).
         // auto_compact_started: { tokens_used, context_window, percentage }
         // auto_compact_completed: { tokens_before, tokens_after }
         "tokens_used"
@@ -3714,7 +3697,7 @@ pub fn decode_session_update(params: &Value) -> Vec<AcpEvent> {
                 out.push(ev);
             }
         }
-        // Grok Build lifecycle hooks (scrollback annotations + execution status).
+        // Supercharge lifecycle hooks (scrollback annotations + execution status).
         "hook_execution" | "hook_annotation" | "hookExecution" | "hookAnnotation" => {
             if let Some(ev) = parse_hook_activity_update(kind, update) {
                 out.push(ev);
@@ -3759,7 +3742,7 @@ pub fn decode_session_update(params: &Value) -> Vec<AcpEvent> {
         }
     }
 
-    // Grok Build streams **context occupancy** on params._meta.totalTokens
+    // Supercharge streams **context occupancy** on params._meta.totalTokens
     // (every thought/tool/message chunk). This is the real window fill — not
     // turn_completed.usage.totalTokens (which sums all modelCalls in the turn).
     // See contextUsage.ts: isLikelyBillingAggregateUsage.
@@ -4091,7 +4074,7 @@ mod session_update_decode_tests {
                 "status": "pending",
                 "kind": "search",
                 "title": "web_search",
-                "rawInput": { "query": "Grok Build ACP" }
+                "rawInput": { "query": "Supercharge ACP" }
             }
         }));
         let completed = decode_session_update(&json!({
@@ -4119,7 +4102,7 @@ mod session_update_decode_tests {
                 && kind == "search"
                 && status == "pending"
                 && raw.pointer("/rawInput/query").and_then(Value::as_str)
-                    == Some("Grok Build ACP")
+                    == Some("Supercharge ACP")
         ));
         assert!(matches!(
             &completed[..],
@@ -4342,8 +4325,37 @@ mod context_tokens_tests {
     }
 
     #[test]
+    fn parses_live_supercharge_model_catalog_and_default() {
+        let init = json!({
+            "_meta": {
+                "modelState": {
+                    "currentModelId": "gpt-6-astra",
+                    "availableModels": [
+                        {
+                            "modelId": "gpt-6-astra",
+                            "name": "GPT-6 Astra",
+                            "_meta": { "totalContextTokens": 256000 }
+                        },
+                        {
+                            "modelId": "deepseek-v4-flash",
+                            "name": "DeepSeek V4 Flash"
+                        }
+                    ]
+                }
+            }
+        });
+        let (models, current) = parse_live_models(&init);
+        assert_eq!(current.as_deref(), Some("gpt-6-astra"));
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].label, "GPT-6 Astra");
+        assert_eq!(models[0].context_window, Some(256000));
+        assert!(models[0].is_default);
+        assert_eq!(models[1].id, "deepseek-v4-flash");
+    }
+
+    #[test]
     fn empty_when_model_state_absent() {
-        // Grok CLI does not expose `_meta.modelState` — must soft-fail to empty.
+        // Supercharge CLI does not expose `_meta.modelState` — must soft-fail to empty.
         assert!(parse_model_context_tokens(&json!({})).is_empty());
         assert!(parse_model_context_tokens(&json!({ "_meta": {} })).is_empty());
         assert!(parse_model_context_tokens(
@@ -4545,7 +4557,7 @@ mod context_tokens_tests {
 
     #[test]
     fn decode_auto_compact_started_emits_cli_occupancy_triplet() {
-        // Live Grok Build wire from updates.jsonl:
+        // Live Supercharge wire from updates.jsonl:
         // tokens_used + context_window + percentage (same as /session-info).
         let evs = decode_session_update(&json!({
             "sessionId": "s1",
@@ -5899,7 +5911,7 @@ mod grok_build_proxy_spawn_tests {
             api_key: "runtime-only-key".into(),
             model: "grok-4.6".into(),
         };
-        let mut cmd = tokio::process::Command::new("grok");
+        let mut cmd = tokio::process::Command::new("supercharge");
         apply_grok_build_proxy_env(&mut cmd, &native);
         let envs = cmd
             .as_std()
@@ -5907,15 +5919,15 @@ mod grok_build_proxy_spawn_tests {
             .filter_map(|(k, v)| Some((k.to_str()?, v?.to_str()?)))
             .collect::<std::collections::HashMap<_, _>>();
         assert_eq!(
-            envs.get("GROK_MODELS_BASE_URL"),
+            envs.get("SUPERCHARGE_MODELS_BASE_URL"),
             Some(&"https://relay.example/v1")
         );
         assert_eq!(
-            envs.get("GROK_MODELS_LIST_URL"),
+            envs.get("SUPERCHARGE_MODELS_LIST_URL"),
             Some(&"https://relay.example/v1/models")
         );
         assert_eq!(
-            envs.get("GROK_CLI_CHAT_PROXY_BASE_URL"),
+            envs.get("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL"),
             Some(&"https://relay.example/v1")
         );
         assert_eq!(envs.get("XAI_API_KEY"), Some(&"runtime-only-key"));
@@ -6295,11 +6307,14 @@ mod sandbox_spawn_tests {
             );
             assert_eq!(
                 spec.env_pair(),
-                ("GROK_SANDBOX".to_string(), profile.to_string())
+                ("SUPERCHARGE_SANDBOX".to_string(), profile.to_string())
             );
             let (args, env) = sandbox_spawn_flags(profile).unwrap();
             assert_eq!(args, vec!["--sandbox".to_string(), profile.to_string()]);
-            assert_eq!(env, ("GROK_SANDBOX".to_string(), profile.to_string()));
+            assert_eq!(
+                env,
+                ("SUPERCHARGE_SANDBOX".to_string(), profile.to_string())
+            );
         }
     }
 
@@ -6330,7 +6345,10 @@ mod sandbox_spawn_tests {
         let (args, env) =
             sandbox_spawn_flags_soft("workspace", Some("0.2.112")).expect("supported");
         assert_eq!(args, vec!["--sandbox".to_string(), "workspace".to_string()]);
-        assert_eq!(env, ("GROK_SANDBOX".to_string(), "workspace".to_string()));
+        assert_eq!(
+            env,
+            ("SUPERCHARGE_SANDBOX".to_string(), "workspace".to_string())
+        );
         // Unknown version still applies (forward-compat).
         assert!(sandbox_spawn_flags_soft("workspace", None).is_some());
         assert!(sandbox_spawn_flags_soft("workspace", Some("dev")).is_some());
@@ -6390,13 +6408,13 @@ mod compaction_spawn_tests {
     fn spawn_env_detail_only_for_segments() {
         assert_eq!(
             compaction_spawn_env("summary", "minimal"),
-            vec![("GROK_COMPACTION_MODE".into(), "summary".into())]
+            vec![("SUPERCHARGE_COMPACTION_MODE".into(), "summary".into())]
         );
         assert_eq!(
             compaction_spawn_env("segments", "none"),
             vec![
-                ("GROK_COMPACTION_MODE".into(), "segments".into()),
-                ("GROK_COMPACTION_DETAIL".into(), "none".into()),
+                ("SUPERCHARGE_COMPACTION_MODE".into(), "segments".into()),
+                ("SUPERCHARGE_COMPACTION_DETAIL".into(), "none".into()),
             ]
         );
     }
@@ -6431,36 +6449,14 @@ fn json_id_u64(v: Option<&Value>) -> Option<u64> {
 }
 
 #[cfg(test)]
-mod cached_token_route_tests {
+mod authentication_route_tests {
     use super::*;
 
     #[test]
     fn rewind_unsupported_error_matches_method_not_found() {
-        // journal drop-last routes on this predicate: a mismatch would send
-        // the early-return error into the last-turn fallback retry path.
         assert!(rpc_looks_like_method_not_found(
             "rewind method not supported (not advertised by agent initialize)"
         ));
-    }
-
-    #[test]
-    fn custom_route_must_not_authenticate_cached_token() {
-        // Official login leaves ~/.grok/auth.json for billing / official-aux.
-        // cached_token reads that file even when GROK_HOME is agent-home.
-        // Loading OIDC into a custom-relay process makes Grok Build send OIDC
-        // to the relay (HTTP 400/401) — "works until I sign in".
-        assert!(!should_authenticate_cached_token(true, true));
-        assert!(!should_authenticate_cached_token(true, false));
-    }
-
-    #[test]
-    fn official_route_authenticates_only_when_cached_token_exists() {
-        // Signed-in official: still send authenticate (and keep the #528
-        // re-sync + one retry on soft-fail).
-        assert!(should_authenticate_cached_token(false, true));
-        // Unsigned-in (no auth.json / no usable token): skip entirely.
-        // Sending authenticate here is a 12s × 2 timeout then soft-fail.
-        assert!(!should_authenticate_cached_token(false, false));
     }
 }
 
@@ -6471,17 +6467,17 @@ mod live_handshake_tests {
 
     #[tokio::test]
     async fn live_initialize_session_new_under_30s() {
-        if std::env::var("GROK_APP_LIVE_ACP").ok().as_deref() != Some("1") {
-            eprintln!("skip live ACP (set GROK_APP_LIVE_ACP=1)");
+        if std::env::var("SUPERCHARGE_APP_LIVE_ACP").ok().as_deref() != Some("1") {
+            eprintln!("skip live ACP (set SUPERCHARGE_APP_LIVE_ACP=1)");
             return;
         }
-        let cli = which::which("grok")
+        let cli = which::which("supercharge")
             .or_else(|_| {
-                let p = crate::process_util::user_home().join(".grok/bin/grok");
+                let p = crate::process_util::user_home().join(".local/bin/supercharge");
                 if p.exists() {
                     Ok(p)
                 } else {
-                    let p2 = crate::process_util::user_home().join(r".grok\bin\grok.exe");
+                    let p2 = crate::process_util::user_home().join(r".local\bin\supercharge.exe");
                     if p2.exists() {
                         Ok(p2)
                     } else {
@@ -6489,7 +6485,7 @@ mod live_handshake_tests {
                     }
                 }
             })
-            .expect("grok cli");
+            .expect("supercharge cli");
         let cwd = std::env::current_dir().unwrap();
         let t0 = std::time::Instant::now();
         let (client, mut events) = AcpClient::spawn(cli, cwd).await.expect("spawn");

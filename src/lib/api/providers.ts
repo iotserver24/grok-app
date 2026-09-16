@@ -43,8 +43,8 @@ export interface CustomProvider {
   name: string;
   hasApiKey: boolean;
   apiBackend: string;
-  /** Explicit relay semantics. Host never infers this from the URL. */
-  providerMode: "generic" | "grok_build_proxy" | string;
+  /** Compatibility field. The host normalizes legacy values to `generic`. */
+  providerMode: "generic" | string;
   isDefault: boolean;
   /** Selectable models for this channel (App-managed catalog). */
   models?: ProviderModelEntry[];
@@ -147,7 +147,7 @@ export async function providersCcSwitchImport(body: {
   });
 }
 
-/** Switch to official Grok Build or a custom provider (writes config.toml default). */
+/** Switch to the catalog-managed default or an App-managed provider. */
 export async function providersActivate(
   source: "official" | "custom",
   providerId?: string | null,
@@ -241,7 +241,7 @@ export async function modelsAuxWebSearch(query: string) {
   return invoke<string>("models_aux_web_search", { query });
 }
 
-// ── Official aux (isolated GROK_HOME + grok -p) ─────────────────────────────
+// ── Legacy auxiliary commands (kept for command/DTO compatibility) ──────────
 
 export interface OfficialAuxStatus {
   available: boolean;
@@ -314,7 +314,7 @@ export async function providersUpsert(body: {
   name?: string;
   apiKey?: string;
   apiBackend?: string;
-  providerMode?: "generic" | "grok_build_proxy" | string;
+  providerMode?: "generic" | string;
   setAsDefault?: boolean;
   createOnly?: boolean;
   models?: ProviderModelEntry[];

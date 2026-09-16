@@ -1,4 +1,4 @@
-//! Wallpaper source: X search + Imagine generate via headless Grok CLI,
+//! Wallpaper source: X search + Imagine generation via the headless Supercharge CLI,
 //! plus allowlisted X / Imagine / Grok-album media download into the library.
 
 use std::fs;
@@ -608,7 +608,7 @@ pub(crate) fn require_cli_ready() -> Result<String, String> {
     let path = probe.path.ok_or_else(|| "cli_missing".to_string())?;
     if !cli_probe::cli_auth_json_present() {
         // Official API key in app secrets also works for some flows, but
-        // headless grok prefers ~/.grok/auth.json — surface login.
+        // Headless Supercharge prefers its shared auth.json — surface login.
         let secrets = crate::secrets::load_secrets_disk_only();
         if !crate::secrets::has_official_key_configured(&secrets) {
             return Err("auth_required".into());
@@ -617,7 +617,7 @@ pub(crate) fn require_cli_ready() -> Result<String, String> {
     Ok(path)
 }
 
-/// Parse headless `grok -p --output-format json` stdout into a gallery payload.
+/// Parse headless `supercharge -p --output-format json` stdout into a gallery payload.
 ///
 /// Real CLI wraps the model answer:
 /// ```json
@@ -1293,7 +1293,10 @@ fn configure_media_command(cmd: &mut Command, session_id: &str, media_tool: Wall
         session_id,
     ]);
     // Use the same official home as require_cli_ready and result auditing.
-    cmd.env("GROK_HOME", crate::paths::resolve_agent_grok_home("shared"));
+    cmd.env(
+        "SUPERCHARGE_HOME",
+        crate::paths::resolve_agent_supercharge_home("shared"),
+    );
 }
 
 fn run_grok_headless_with_options(
@@ -1314,6 +1317,9 @@ fn run_grok_headless_with_options(
         return Err("cancelled".into());
     }
     let mut cmd = Command::new(cli_path);
+    let supercharge_home = crate::paths::resolve_agent_supercharge_home("shared");
+    let _ = std::fs::create_dir_all(&supercharge_home);
+    cmd.env("SUPERCHARGE_HOME", &supercharge_home);
     cmd.arg("-p")
         .arg(prompt)
         .arg("--always-approve")
@@ -1344,11 +1350,8 @@ fn run_grok_headless_with_options(
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
-    process_util::apply_no_window_std(&mut cmd);
+    process_util::apply_cli_env_std(&mut cmd);
     configure_wallpaper_process_tree(&mut cmd);
-    if let Some(path_env) = process_util::enriched_path_env() {
-        cmd.env("PATH", path_env);
-    }
     proxy::apply_to_std_command(&mut cmd);
 
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -2921,7 +2924,7 @@ mod tests {
             std::env::temp_dir().join(format!("wallpaper-cancel-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&test_dir).unwrap();
         #[cfg(windows)]
-        let cli = test_dir.join("grok.cmd");
+        let cli = test_dir.join("supercharge.cmd");
         #[cfg(windows)]
         fs::write(
             &cli,
@@ -2929,7 +2932,7 @@ mod tests {
         )
         .unwrap();
         #[cfg(unix)]
-        let cli = test_dir.join("grok");
+        let cli = test_dir.join("supercharge");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -2971,13 +2974,13 @@ mod tests {
     #[test]
     fn wallpaper_cli_drains_large_stdout_and_stderr_before_exit() {
         let test_dir = std::env::temp_dir().join(format!(
-            "grok-app-wallpaper-pipe-drain-{}",
+            "supercharge-app-wallpaper-pipe-drain-{}",
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir(&test_dir).expect("create pipe-drain test directory");
 
         #[cfg(windows)]
-        let fake_cli = test_dir.join("grok.cmd");
+        let fake_cli = test_dir.join("supercharge.cmd");
         #[cfg(windows)]
         std::fs::write(
             &fake_cli,
@@ -2986,7 +2989,7 @@ mod tests {
         .expect("write fake Windows CLI");
 
         #[cfg(unix)]
-        let fake_cli = test_dir.join("grok");
+        let fake_cli = test_dir.join("supercharge");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -3021,14 +3024,14 @@ mod tests {
     #[test]
     fn wallpaper_cli_rejects_oversized_stdout_after_draining_it() {
         let test_dir = std::env::temp_dir().join(format!(
-            "grok-app-wallpaper-pipe-limit-{}",
+            "supercharge-app-wallpaper-pipe-limit-{}",
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir(&test_dir).expect("create pipe-limit test directory");
         let oversized = MAX_WALLPAPER_CLI_STDOUT_BYTES + 1;
 
         #[cfg(windows)]
-        let fake_cli = test_dir.join("grok.cmd");
+        let fake_cli = test_dir.join("supercharge.cmd");
         #[cfg(windows)]
         std::fs::write(
             &fake_cli,
@@ -3039,7 +3042,7 @@ mod tests {
         .expect("write oversized fake Windows CLI");
 
         #[cfg(unix)]
-        let fake_cli = test_dir.join("grok");
+        let fake_cli = test_dir.join("supercharge");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -3408,7 +3411,7 @@ mod tests {
         assert!(serialized.get("mediaQuality").is_none());
     }
 
-    /// Real headless `grok -p --output-format json` shape (2026-07-28 probe).
+    /// Real headless `supercharge -p --output-format json` shape (2026-07-28 probe).
     #[test]
     fn parse_headless_envelope_with_nested_text() {
         let raw = r#"{
@@ -3463,8 +3466,11 @@ and https://pbs.twimg.com/media/HNccFG2X0AE8gQ6.jpg?format=jpg&name=small
     }
 
     fn test_tmp_home(label: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("grok-app-wp-lib-{}-{}", label, std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "supercharge-app-wp-lib-{}-{}",
+            label,
+            std::process::id()
+        ));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -3488,9 +3494,9 @@ and https://pbs.twimg.com/media/HNccFG2X0AE8gQ6.jpg?format=jpg&name=small
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         let tmp = test_tmp_home("del");
-        // SAFETY: test-only, mutex-serialized GROK_APP_HOME mutation.
+        // SAFETY: test-only, mutex-serialized SUPERCHARGE_APP_HOME mutation.
         unsafe {
-            std::env::set_var("GROK_APP_HOME", &tmp);
+            std::env::set_var("SUPERCHARGE_APP_HOME", &tmp);
         }
         ensure_wallpaper_dirs();
         let root = wallpapers_root();
@@ -3511,7 +3517,7 @@ and https://pbs.twimg.com/media/HNccFG2X0AE8gQ6.jpg?format=jpg&name=small
         assert!(outside.exists());
 
         unsafe {
-            std::env::remove_var("GROK_APP_HOME");
+            std::env::remove_var("SUPERCHARGE_APP_HOME");
         }
         let _ = fs::remove_dir_all(&tmp);
     }
@@ -3523,7 +3529,7 @@ and https://pbs.twimg.com/media/HNccFG2X0AE8gQ6.jpg?format=jpg&name=small
             .unwrap_or_else(|e| e.into_inner());
         let tmp = test_tmp_home("list");
         unsafe {
-            std::env::set_var("GROK_APP_HOME", &tmp);
+            std::env::set_var("SUPERCHARGE_APP_HOME", &tmp);
         }
         ensure_wallpaper_dirs();
         let root = wallpapers_root();
@@ -3544,7 +3550,7 @@ and https://pbs.twimg.com/media/HNccFG2X0AE8gQ6.jpg?format=jpg&name=small
         assert!(list.iter().all(|e| e.kind == "image"));
 
         unsafe {
-            std::env::remove_var("GROK_APP_HOME");
+            std::env::remove_var("SUPERCHARGE_APP_HOME");
         }
         let _ = fs::remove_dir_all(&tmp);
     }

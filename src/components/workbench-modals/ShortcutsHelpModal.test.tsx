@@ -21,7 +21,6 @@ function renderHelp(
       platform="win"
       composerSendKeyPref="enter"
       shortcutRemaps={{}}
-      voiceHotkeyEnabled
       onClose={onClose}
       {...over}
     />,

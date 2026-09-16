@@ -20,7 +20,7 @@ export type PlanHistoryEntry = {
   at: string;
 };
 
-export const PLAN_HISTORY_STORAGE_KEY = "grok.planHistory";
+export const PLAN_HISTORY_STORAGE_KEY = "supercharge.planHistory";
 export const PLAN_HISTORY_MAX = 30;
 /** Cap stored preview size (characters) — keeps localStorage lean. */
 export const PLAN_HISTORY_BODY_PREVIEW_MAX = 2000;

@@ -31,7 +31,7 @@ export type DesktopNotifyOptions = {
   sessionId?: string | null;
   /**
    * Play the optional notify beep after a successful show.
-   * `undefined` → use localStorage `grok.notifySound` pref (default off).
+   * `undefined` → use localStorage `supercharge.notifySound` pref (default off).
    */
   sound?: boolean;
 };

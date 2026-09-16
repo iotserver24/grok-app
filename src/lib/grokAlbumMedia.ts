@@ -1,4 +1,4 @@
-import * as api from "@/lib/api";
+import * as api from "@/lib/api/wallpaper";
 import { createWallpaperRequestId } from "@/lib/wallpaperRequest";
 import type { WallpaperFetchResult } from "@/lib/wallpaperSource";
 

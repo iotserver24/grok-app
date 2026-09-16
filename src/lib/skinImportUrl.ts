@@ -1,5 +1,6 @@
 /**
- * Parse `grok://skin/import` / `grok-app://skin/import` (and `grok:skin/import`).
+ * Parse Supercharge skin links. The previous `grok://` / `grok-app://`
+ * schemes remain accepted as legacy reader aliases.
  * Shared fixtures: `skinImportUrl.fixtures.json`.
  */
 
@@ -106,7 +107,7 @@ export function validateHttpsPackUrl(href: string): SkinImportParsed {
 }
 
 /**
- * Parse a grok / grok-app skin import URI.
+ * Parse a supercharge / supercharge-app skin import URI, including legacy aliases.
  * Does not fetch. `repo=official` is accepted here; empty official URL
  * is resolved by {@link resolveOfficialSkinImport}.
  */
@@ -121,7 +122,12 @@ export function parseSkinImportUri(raw: string): SkinImportParsed {
   const colon = noFrag.indexOf(":");
   if (colon <= 0) return { ok: false, code: "invalid_url", reason: "no_scheme" };
   const scheme = noFrag.slice(0, colon).toLowerCase();
-  if (scheme !== "grok" && scheme !== "grok-app") {
+  if (
+    scheme !== "supercharge" &&
+    scheme !== "supercharge-app" &&
+    scheme !== "grok" &&
+    scheme !== "grok-app"
+  ) {
     return { ok: false, code: "invalid_url", reason: "scheme" };
   }
   let rest = noFrag.slice(colon + 1);

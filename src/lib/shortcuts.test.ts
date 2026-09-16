@@ -46,7 +46,6 @@ const tStub = (key: string) => {
     "shortcuts.settings": "Settings",
     "shortcuts.help": "Keyboard shortcuts",
     "shortcuts.doctor": "Doctor",
-    "shortcuts.liveVoice": "Live voice",
     "shortcuts.voice": "Dictation",
     "shortcuts.quit": "Quit (press twice)",
     "shortcuts.zoomIn": "Zoom in",
@@ -101,6 +100,16 @@ describe("shortcuts catalog", () => {
     expect(shortcutScope("promptHistory")).toBe("chat-focus");
     expect(shortcutScope("zoomIn")).toBe("global");
     expect(shortcutScope("typeToFocus")).toBe("global");
+  });
+
+  it("omits the removed Live Voice shortcut while retaining dictation", () => {
+    expect(SHORTCUTS.map((shortcut) => String(shortcut.id))).not.toContain("liveVoice");
+    expect(SHORTCUTS.find((shortcut) => shortcut.id === "dictation")).toMatchObject({
+      labelKey: "shortcuts.voice",
+      group: "input",
+      mac: "Ctrl Space",
+      win: "Ctrl Space",
+    });
   });
 
   it("lists find-in-chat and toggle sidebar", () => {
@@ -267,7 +276,6 @@ describe("matchGlobalShortcut", () => {
       { id: "newChat", key: "n" },
       { id: "doctor", key: "d", shift: true },
       { id: "copyLastReply", key: "c", shift: true },
-      { id: "liveVoice", key: "v", shift: true },
       { id: "toggleSidebar", key: "b" },
       { id: "sideFiles", key: "p" },
       { id: "sideBrowser", key: "t" },
@@ -317,7 +325,7 @@ describe("matchGlobalShortcut", () => {
     ).toBe("toggleSidebar");
   });
 
-  it("allows find/newChat/settings/search/help/doctor/copy/live/sidebar/side-pane while typing", () => {
+  it("allows find/newChat/settings/search/help/doctor/copy/sidebar/side-pane while typing", () => {
     expect(
       matchGlobalShortcut(chord({ key: "f", typing: true }), noRemaps),
     ).toBe("findInChat");
@@ -345,12 +353,6 @@ describe("matchGlobalShortcut", () => {
         noRemaps,
       ),
     ).toBe("copyLastReply");
-    expect(
-      matchGlobalShortcut(
-        chord({ key: "v", shift: true, typing: true }),
-        noRemaps,
-      ),
-    ).toBe("liveVoice");
     expect(
       matchGlobalShortcut(chord({ key: "b", typing: true }), noRemaps),
     ).toBe("toggleSidebar");
@@ -424,54 +426,6 @@ describe("matchGlobalShortcut", () => {
     }
   });
 
-  it("does not match liveVoice when the hotkey preference is off", () => {
-    expect(
-      matchGlobalShortcut(
-        chord({ key: "v", shift: true }),
-        noRemaps,
-        { voiceHotkeyEnabled: false },
-      ),
-    ).toBeNull();
-    expect(
-      matchGlobalShortcut(
-        chord({ key: "v", shift: true, typing: true }),
-        noRemaps,
-        { voiceHotkeyEnabled: false },
-      ),
-    ).toBeNull();
-    // Other chords still work.
-    expect(
-      matchGlobalShortcut(
-        chord({ key: "k" }),
-        noRemaps,
-        { voiceHotkeyEnabled: false },
-      ),
-    ).toBe("search");
-  });
-
-  it("matches liveVoice when the hotkey preference is on", () => {
-    expect(
-      matchGlobalShortcut(
-        chord({ key: "v", shift: true }),
-        noRemaps,
-        { voiceHotkeyEnabled: true },
-      ),
-    ).toBe("liveVoice");
-  });
-});
-
-describe("liveVoice hotkey display Off", () => {
-  it("shows Off for liveVoice when hotkey disabled", () => {
-    const mac = shortcutsForPlatform("mac", "enter", {}, false);
-    const win = shortcutsForPlatform("win", "enter", {}, false);
-    expect(mac.find((s) => s.id === "liveVoice")?.keys).toBe("Off");
-    expect(win.find((s) => s.id === "liveVoice")?.keys).toBe("Off");
-  });
-
-  it("keeps liveVoice chord when hotkey enabled", () => {
-    const mac = shortcutsForPlatform("mac", "enter", {}, true);
-    expect(mac.find((s) => s.id === "liveVoice")?.keys).toMatch(/⇧|Shift/i);
-  });
 });
 
 describe("filterShortcutRows", () => {

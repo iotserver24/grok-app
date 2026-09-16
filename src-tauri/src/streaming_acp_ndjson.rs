@@ -110,16 +110,13 @@ fn resolve_binary(manual_path: Option<&str>) -> Option<PathBuf> {
 
 fn apply_agent_env(cmd: &mut Command) {
     let mode = crate::store::load_settings().session_data_mode;
-    let grok_home = crate::paths::resolve_agent_grok_home(&mode);
-    let _ = std::fs::create_dir_all(&grok_home);
-    cmd.env("GROK_HOME", &grok_home);
+    let supercharge_home = crate::paths::resolve_agent_supercharge_home(&mode);
+    let _ = std::fs::create_dir_all(&supercharge_home);
+    cmd.env("SUPERCHARGE_HOME", &supercharge_home);
     if mode != "shared" {
         crate::providers::prepare_route_auth_for_agent();
     }
-    crate::process_util::ensure_home_env_std(cmd);
-    if let Some(path_env) = crate::process_util::enriched_path_env() {
-        cmd.env("PATH", path_env);
-    }
+    crate::process_util::apply_cli_env_std(cmd);
     crate::proxy::apply_to_std_command(cmd);
 }
 
@@ -377,7 +374,7 @@ mod tests {
     #[test]
     fn version_gate_at_0_2_117() {
         assert_eq!(
-            cli_supports_streaming_acp_ndjson("grok 0.2.117"),
+            cli_supports_streaming_acp_ndjson("supercharge 0.2.117"),
             Some(true)
         );
         assert_eq!(cli_supports_streaming_acp_ndjson("0.2.200"), Some(true));
@@ -391,7 +388,7 @@ mod tests {
         let expected: Vec<String> =
             vec!["--output-format".to_string(), "streaming-json".to_string()];
         assert_eq!(
-            streaming_json_output_format_args_soft(Some("grok 0.2.117")),
+            streaming_json_output_format_args_soft(Some("supercharge 0.2.117")),
             expected
         );
         assert!(streaming_json_output_format_args_soft(Some("0.2.100")).is_empty());

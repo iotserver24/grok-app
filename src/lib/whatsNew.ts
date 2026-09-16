@@ -13,8 +13,8 @@ export const APP_VERSION: string = String(
 
 export const CHANGELOG_MARKDOWN: string = changelogMarkdown;
 
-export const WHATS_NEW_SEEN_KEY = "grok-app.whatsNew.seenVersion";
-export const WHATS_NEW_FIRST_SEEN_KEY = "grok-app.whatsNew.firstSeenVersion";
+export const WHATS_NEW_SEEN_KEY = "supercharge-app.whatsNew.seenVersion";
+export const WHATS_NEW_FIRST_SEEN_KEY = "supercharge-app.whatsNew.firstSeenVersion";
 export const WHATS_NEW_OPEN_EVENT = "grok-app.whats-new.open";
 
 export type ChangelogLang = "en" | "zh";

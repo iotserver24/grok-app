@@ -1026,7 +1026,7 @@ export function RuntimeSection() {
                   <ManagedSetupPanel
                     locale={resolveLocale(locale)}
                     cliFound={cliInfo.found}
-                    onOpenAccount={() => navigateTo("account", "official")}
+                    onOpenAccount={() => navigateTo("account", "providers")}
                   />
                 </div>
               </>

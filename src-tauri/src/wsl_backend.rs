@@ -1,8 +1,8 @@
-//! Windows WSL backend for Grok Build CLI.
+//! Windows WSL backend for the Supercharge CLI.
 //!
 //! When `AppSettings.cli_backend == "wsl"`, the host spawns:
-//!   `wsl.exe [-d Distro] --cd <linux_cwd> -- env KEY=VAL… <linux_cli> <grok args…>`
-//! instead of a native Windows `grok.exe`. Users who installed the CLI only
+//!   `wsl.exe [-d Distro] --cd <linux_cwd> -- env KEY=VAL… <linux_cli> <args…>`
+//! instead of a native Windows binary. Users who installed Supercharge only
 //! inside WSL can run the desktop app without a separate ACP TCP tunnel.
 //!
 //! Priority: `acp_server_addr` (API mode) still wins over WSL and native spawn.
@@ -35,7 +35,7 @@ const VERSION_PROBE_TIMEOUT: Duration = Duration::from_secs(8);
 pub struct WslLaunch {
     /// Empty = default WSL distro.
     pub distro: Option<String>,
-    /// Absolute or PATH-relative CLI path **inside** WSL (e.g. `grok`, `~/.grok/bin/grok`).
+    /// Absolute or PATH-relative CLI path inside WSL (for example `supercharge`).
     pub linux_cli: String,
 }
 
@@ -71,13 +71,18 @@ pub fn resolve_wsl_launch(settings: &AppSettings) -> Option<WslLaunch> {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string());
-    let linux_cli = settings
+    let configured = settings
         .wsl_cli_path
         .as_deref()
         .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or("grok")
-        .to_string();
+        .filter(|s| !s.is_empty());
+    // Ignore an old saved default so a converted installation cannot silently
+    // continue launching Grok. Explicit Supercharge paths remain supported.
+    let linux_cli = match configured {
+        Some("grok") | Some("~/.grok/bin/grok") => "supercharge".to_string(),
+        Some(path) => path.to_string(),
+        None => "supercharge".to_string(),
+    };
     Some(WslLaunch { distro, linux_cli })
 }
 
@@ -225,7 +230,7 @@ pub fn probe_cli_for_settings(settings: &AppSettings, manual_path: Option<&str>)
     }
 }
 
-/// Probe Grok Build CLI **inside** WSL for settings / doctor.
+/// Probe Supercharge CLI **inside** WSL for settings / doctor.
 pub fn probe_wsl_cli(settings: &AppSettings) -> CliProbeResult {
     let launch = match resolve_wsl_launch(settings) {
         Some(l) => l,
@@ -307,26 +312,28 @@ pub fn read_wsl_version(launch: &WslLaunch) -> Option<String> {
 }
 
 fn run_wsl_cli_probe(wsl: &Path, launch: &WslLaunch) -> (Option<String>, Option<String>, bool) {
-    // Expand optional ~ and prefer explicit path; otherwise PATH + ~/.grok/bin.
-    // Print: first line = resolved path, rest = --version banner.
+    // Expand optional ~ and prefer explicit path; otherwise PATH +
+    // ~/.supercharge/bin. Print: first line = resolved path, rest = banner.
     let script = r#"
 set -e
-export PATH="$HOME/.grok/bin:$HOME/.local/bin:$PATH"
+export PATH="$HOME/.supercharge/bin:$HOME/.local/bin:$PATH"
 CLI_RAW="$1"
-if [ -n "$CLI_RAW" ] && [ "$CLI_RAW" != "grok" ]; then
+if [ -n "$CLI_RAW" ] && [ "$CLI_RAW" != "supercharge" ]; then
   case "$CLI_RAW" in
     "~/"*) CLI="${HOME}/${CLI_RAW#~/}" ;;
     *) CLI="$CLI_RAW" ;;
   esac
 else
-  CLI="$(command -v grok 2>/dev/null || true)"
-  if [ -z "$CLI" ] && [ -x "$HOME/.grok/bin/grok" ]; then
-    CLI="$HOME/.grok/bin/grok"
+  CLI="$(command -v supercharge 2>/dev/null || command -v supercharge-pager 2>/dev/null || true)"
+  if [ -z "$CLI" ] && [ -x "$HOME/.supercharge/bin/supercharge" ]; then
+    CLI="$HOME/.supercharge/bin/supercharge"
+  elif [ -z "$CLI" ] && [ -x "$HOME/.supercharge/bin/supercharge-pager" ]; then
+    CLI="$HOME/.supercharge/bin/supercharge-pager"
   fi
 fi
 if [ -z "$CLI" ]; then
   echo ""
-  echo "grok not found in WSL PATH or ~/.grok/bin" >&2
+  echo "Supercharge not found in WSL PATH or ~/.supercharge/bin" >&2
   exit 127
 fi
 echo "$CLI"
@@ -341,7 +348,7 @@ echo "$CLI"
         .arg("bash")
         .arg("-lc")
         .arg(script)
-        .arg("grok-wsl-probe")
+        .arg("supercharge-wsl-probe")
         .arg(&launch.linux_cli)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
@@ -365,7 +372,7 @@ echo "$CLI"
                 let path = lines.next().map(|s| s.to_string());
                 let version_line = lines
                     .find(|l| {
-                        l.to_ascii_lowercase().contains("grok")
+                        l.to_ascii_lowercase().contains("supercharge")
                             || extract_version_token(l).is_some()
                     })
                     .map(|s| s.to_string())
@@ -378,7 +385,7 @@ echo "$CLI"
                     (Some(p), Some(v)) => (Some(p.clone()), Some(v.clone())),
                     (Some(p), None) => {
                         if extract_version_token(p).is_some()
-                            || p.to_ascii_lowercase().contains("grok ")
+                            || p.to_ascii_lowercase().contains("supercharge ")
                         {
                             (None, Some(p.clone()))
                         } else {
@@ -413,7 +420,7 @@ fn is_safe_wsl_cli_path(path: &str) -> bool {
     if p.is_empty() || p.len() > 512 {
         return false;
     }
-    // Disallow absolute path traversal via ".." components (still allow `.grok`).
+    // Disallow absolute path traversal via ".." components.
     if p.split('/').any(|seg| seg == "..") {
         return false;
     }
@@ -465,9 +472,9 @@ pub fn start_wsl_tokio_command(
     let cli = launch.linux_cli.as_str();
     if cli.starts_with("~/") || cli == "~" {
         // Expand tilde via argv — path is never concatenated into the script body.
-        // $1 = relative path under $HOME (or "grok" for bare `~`); remaining "$@" = grok args.
+        // $1 = relative path under $HOME (or "supercharge" for bare `~`).
         let rest = if cli == "~" {
-            "grok"
+            "supercharge"
         } else {
             cli.trim_start_matches("~/")
         };
@@ -477,7 +484,7 @@ pub fn start_wsl_tokio_command(
         cmd.arg("bash");
         cmd.arg("-lc");
         cmd.arg(r#"cli="$HOME/$1"; shift; exec "$cli" "$@""#);
-        cmd.arg("grok-wsl");
+        cmd.arg("supercharge-wsl");
         cmd.arg(rest);
     } else {
         cmd.arg(cli);
@@ -487,19 +494,21 @@ pub fn start_wsl_tokio_command(
 
 /// Propagate Host env vars into the WSL Linux process via `WSLENV`.
 ///
-/// `GROK_HOME/p` asks WSL to translate the Windows path to `/mnt/…`.
+/// `SUPERCHARGE_HOME/p` asks WSL to translate the Windows path to `/mnt/…`.
 /// Do **not** forward Windows `PATH` (it breaks Linux tool resolution).
 const WSLENV_KEYS: &str = concat!(
-    "GROK_HOME/p:",
-    "GROK_CONFIG:",
-    "GROK_CLAUDE_MCPS_ENABLED:",
-    "GROK_CURSOR_MCPS_ENABLED:",
-    "GROK_SANDBOX:",
-    "GROK_MEMORY:",
-    "GROK_SUBAGENT_WORKTREE_SNAPSHOT:",
-    "GROK_MODELS_BASE_URL:",
-    "GROK_MODELS_LIST_URL:",
-    "GROK_CLI_CHAT_PROXY_BASE_URL:",
+    "SUPERCHARGE_HOME/p:",
+    "SUPERCHARGE_CONFIG:",
+    "SUPERCHARGE_CLAUDE_MCPS_ENABLED:",
+    "SUPERCHARGE_CURSOR_MCPS_ENABLED:",
+    "SUPERCHARGE_SANDBOX:",
+    "SUPERCHARGE_MEMORY:",
+    "SUPERCHARGE_SUBAGENT_WORKTREE_SNAPSHOT:",
+    "SUPERCHARGE_TWO_PASS_COMPACTION:",
+    "SUPERCHARGE_AUTO_WAKE:",
+    "SUPERCHARGE_MODELS_BASE_URL:",
+    "SUPERCHARGE_MODELS_LIST_URL:",
+    "SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL:",
     "XAI_API_KEY:",
     "HTTP_PROXY:",
     "HTTPS_PROXY:",
@@ -631,11 +640,11 @@ mod tests {
     }
 
     #[test]
-    fn forwards_native_grok_proxy_env_without_path_translation() {
+    fn forwards_native_supercharge_proxy_env_without_path_translation() {
         for key in [
-            "GROK_MODELS_BASE_URL:",
-            "GROK_MODELS_LIST_URL:",
-            "GROK_CLI_CHAT_PROXY_BASE_URL:",
+            "SUPERCHARGE_MODELS_BASE_URL:",
+            "SUPERCHARGE_MODELS_LIST_URL:",
+            "SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL:",
             "XAI_API_KEY:",
         ] {
             assert!(WSLENV_KEYS.contains(key), "missing {key}");

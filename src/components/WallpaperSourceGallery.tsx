@@ -8,14 +8,11 @@ import type { MessageKey } from "@/i18n";
 import type { WallpaperSourceModalProps, WallpaperSourceTab } from "./WallpaperSourceModal";
 import type { WallpaperGalleryItem } from "@/lib/wallpaperSource";
 import type { WallpaperGalleryEmptyPresentation } from "@/lib/wallpaperGalleryPro";
-import { resolveWallpaperXCitation } from "@/lib/xEvidenceCitation";
 import { ensureMediaEndpoint, resolveImageSrcSync } from "@/lib/imageSrc";
 import { WallpaperProviderThumbnail } from "./WallpaperProviderThumbnail";
-import { GrokAlbumThumbnail } from "./GrokAlbumThumbnail";
 import { WallpaperMediaDetails } from "./WallpaperMediaDetails";
 import { WallpaperSourceAttribution } from "./WallpaperSourceAttribution";
-import { IconEdit, IconHeart, IconInfo, IconPlay } from "./icons";
-import { isWallpaperImageItem } from "@/lib/wallpaperImagine";
+import { IconHeart, IconInfo } from "./icons";
 
 type Props = {
   t: WallpaperSourceModalProps["t"];
@@ -34,9 +31,6 @@ type Props = {
   requestDeleteLibraryItem: (item: WallpaperGalleryItem, event: MouseEvent) => void;
   favoriteBusyIds?: ReadonlySet<string>;
   onToggleFavorite?: (item: WallpaperGalleryItem) => void;
-  onReusePrompt?: (item: WallpaperGalleryItem) => void;
-  onGenerateVideo: (item: WallpaperGalleryItem) => void;
-  onEditImage: (item: WallpaperGalleryItem) => void;
   canLoadMore: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;
@@ -76,9 +70,6 @@ function itemActionAccessibleName(
 }
 
 function sourceLabelKey(item: WallpaperGalleryItem): MessageKey {
-  if (item.source === "imagine") return "settings.wallpaperImagine";
-  if (item.source === "grok_album") return "settings.wallpaperGrokAlbum";
-  if (item.source === "x") return "settings.wallpaperFromX";
   if (item.source === "web") return "settings.wallpaperWeb";
   if (item.source === "openverse") return "settings.wallpaperOpenverse";
   if (item.source === "pexels") return "settings.wallpaperPexels";
@@ -102,17 +93,12 @@ export function WallpaperSourceGallery({
   requestDeleteLibraryItem,
   favoriteBusyIds,
   onToggleFavorite,
-  onReusePrompt,
-  onGenerateVideo,
-  onEditImage,
   canLoadMore,
   loadingMore,
   onLoadMore,
   scrollRef,
 }: Props) {
-  const isImagineLayout = tab === "imagine";
   const isLibraryTab = tab === "library";
-  const stableAppendLayout = !isImagineLayout;
   const [, refreshMediaSources] = useState(0);
   const [details, setDetails] = useState<{ tab: string; id: string } | null>(
     null,
@@ -156,8 +142,7 @@ export function WallpaperSourceGallery({
       <div
         ref={scrollRef}
         className={
-          "wallpaper-masonry-scroll" +
-          (isImagineLayout ? " wallpaper-masonry-scroll--imagine" : "")
+          "wallpaper-masonry-scroll"
         }
         role="list"
         aria-label={t("settings.wallpaperSource.gallery")}
@@ -166,9 +151,7 @@ export function WallpaperSourceGallery({
       >
         <div
           className={
-            "wallpaper-masonry" +
-            (isImagineLayout ? " wallpaper-masonry--full" : "") +
-            (stableAppendLayout ? " wallpaper-masonry--stable" : "")
+            "wallpaper-masonry wallpaper-masonry--stable"
           }
         >
           {showEmptyBlock && emptyState ? (
@@ -208,22 +191,15 @@ export function WallpaperSourceGallery({
             const active = item.id === selectedId;
             const loadingThis = previewingId === item.id;
             const src = itemThumbSrc(item);
-            const canCreateFromImage = isWallpaperImageItem(item);
             const localMedia =
               !!item.localPath || item.fullUrl.startsWith("file://");
             const localVideo =
               item.kind === "video" &&
               localMedia;
-            const cite =
-              item.source === "x" || (!item.source && tab === "x")
-                ? resolveWallpaperXCitation(item)
-                : null;
             const mediaAspectRatio =
               Number(item.width) > 0 && Number(item.height) > 0
                 ? `${Number(item.width)} / ${Number(item.height)}`
-                : stableAppendLayout
-                  ? "16 / 10"
-                  : undefined;
+                : "16 / 10";
             const meta = loadingThis
               ? t("settings.wallpaperSource.loadingOriginal")
               : [
@@ -252,9 +228,7 @@ export function WallpaperSourceGallery({
                   <div
                     className="wallpaper-masonry__media-shell"
                     style={
-                      !isImagineLayout && mediaAspectRatio
-                        ? { aspectRatio: mediaAspectRatio }
-                        : undefined
+                      mediaAspectRatio ? { aspectRatio: mediaAspectRatio } : undefined
                     }
                   >
                     <button
@@ -269,21 +243,7 @@ export function WallpaperSourceGallery({
                       aria-label={t("settings.wallpaperSource.openPreview")}
                     >
                       <span className="wallpaper-masonry__media">
-                        {item.source === "grok_album" && !isLibraryTab ? (
-                          <GrokAlbumThumbnail
-                            url={item.thumbUrl || item.fullUrl}
-                            alt={
-                              item.textPreview ||
-                              item.prompt ||
-                              item.username ||
-                              ""
-                            }
-                            width={item.width}
-                            height={item.height}
-                            itemId={item.id}
-                            onUnavailable={dropItem}
-                          />
-                        ) : !isLibraryTab &&
+                        {!isLibraryTab &&
                           !localMedia &&
                           (item.source === "openverse" ||
                             item.source === "pexels") ? (
@@ -318,50 +278,6 @@ export function WallpaperSourceGallery({
                         )}
                       </span>
                     </button>
-                    {canCreateFromImage ? (
-                      <>
-                        <button
-                          type="button"
-                          className="wallpaper-masonry__video-action wallpaper-masonry__edit-action"
-                          disabled={locked || loadingThis}
-                          aria-label={itemActionAccessibleName(
-                            t,
-                            "settings.wallpaperSource.editImage",
-                            item,
-                            index,
-                          )}
-                          title={t("settings.wallpaperSource.editImage")}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            onEditImage(item);
-                          }}
-                        >
-                          <IconEdit size={16} aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          className="wallpaper-masonry__video-action"
-                          disabled={locked || loadingThis}
-                          aria-label={itemActionAccessibleName(
-                            t,
-                            "settings.wallpaperSource.generateVideoFromImage",
-                            item,
-                            index,
-                          )}
-                          title={t(
-                            "settings.wallpaperSource.generateVideoFromImage",
-                          )}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            onGenerateVideo(item);
-                          }}
-                        >
-                          <IconPlay size={16} aria-hidden />
-                        </button>
-                      </>
-                    ) : null}
                   </div>
                   {meta ? (
                     <span className="wallpaper-masonry__meta">{meta}</span>
@@ -389,38 +305,6 @@ export function WallpaperSourceGallery({
                     disabled={locked}
                     onOpen={openExternalSource}
                   />
-                ) : null}
-                {cite && !loadingThis ? (
-                  <div
-                    className={
-                      "wallpaper-masonry__cite" +
-                      (cite.state === "verified"
-                        ? " wallpaper-masonry__cite--verified"
-                        : " wallpaper-masonry__cite--unverified")
-                    }
-                    title={t(cite.hintKey as MessageKey)}
-                  >
-                    {cite.state === "verified" && cite.statusUrl ? (
-                      <button
-                        type="button"
-                        className="wallpaper-masonry__cite-btn"
-                        disabled={locked}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          openExternalSource(cite.statusUrl!);
-                        }}
-                        title={t("settings.wallpaperSource.cite.openPost")}
-                        aria-label={t("settings.wallpaperSource.cite.openPost")}
-                      >
-                        {t(cite.labelKey as MessageKey)}
-                      </button>
-                    ) : (
-                      <span className="wallpaper-masonry__cite-badge">
-                        {t(cite.labelKey as MessageKey)}
-                      </span>
-                    )}
-                  </div>
                 ) : null}
                 {onToggleFavorite ? (
                   <button
@@ -488,14 +372,6 @@ export function WallpaperSourceGallery({
         locked={locked}
         onClose={() => setDetails(null)}
         onOpenSource={openExternalSource}
-        onReusePrompt={
-          onReusePrompt
-            ? (item) => {
-                setDetails(null);
-                onReusePrompt(item);
-              }
-            : undefined
-        }
       />
     </>
   );

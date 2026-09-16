@@ -233,7 +233,7 @@ export function useAppearanceEditorModel(opts: {
   const [wallpaperFocusOpen, setWallpaperFocusOpen] = useState(false);
   const [wallpaperSourceOpen, setWallpaperSourceOpen] = useState(false);
   const [wallpaperSourceTab, setWallpaperSourceTab] =
-    useState<WallpaperSourceTab>("x");
+    useState<WallpaperSourceTab>("web");
 
   const [thinkingExpand, setThinkingExpand] = useState<ThinkingExpandPref>(() =>
     loadThinkingExpandPref(),

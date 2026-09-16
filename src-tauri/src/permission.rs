@@ -9,19 +9,19 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
 pub enum PermissionPolicy {
-    /// Grok Build `default` — ask every tool that needs approval (unless session cache hits).
+    /// Supercharge `default` — ask every tool that needs approval (unless session cache hits).
     #[default]
     Ask,
     AllowOnce,
     AllowForSession,
-    /// Grok Build CLI `auto` — fewer prompts with safety checks (Host treats like Ask when prompted).
+    /// Supercharge CLI `auto` — fewer prompts with safety checks (Host treats like Ask when prompted).
     Auto,
-    /// Grok Build `dontAsk` — deny anything not pre-approved (no interactive prompt).
+    /// Supercharge `dontAsk` — deny anything not pre-approved (no interactive prompt).
     DontAsk,
-    /// Grok Build `acceptEdits` — auto-approve file edit tools inside project.
+    /// Supercharge `acceptEdits` — auto-approve file edit tools inside project.
     AcceptEdits,
     Deny,
-    /// Grok Build `bypassPermissions` / YOLO — settings only, never default chip.
+    /// Supercharge `bypassPermissions` / YOLO — settings only, never default chip.
     AlwaysApprove,
 }
 
@@ -58,7 +58,7 @@ impl PermissionPolicy {
     }
 }
 
-/// Tools treated as file edits for `acceptEdits` mode (aligned with Grok Build docs).
+/// Tools treated as file edits for `acceptEdits` mode (aligned with Supercharge docs).
 pub fn is_edit_tool(tool_name: &str) -> bool {
     let t = tool_name.to_lowercase();
     matches!(
@@ -498,7 +498,7 @@ pub fn may_auto_allow_download(
 
 /// Decide whether Host may auto-approve without UI.
 ///
-/// Rules (H05 + §17.3 + Grok Build permission modes):
+/// Rules (H05 + §17.3 + Supercharge permission modes):
 /// - Outside project → never auto (even with session cache; AlwaysApprove is the only global YOLO)
 /// - Deny / DontAsk policy → never auto-allow
 /// - Session cache hit + in-project → auto (even when chip policy is Ask — "Allow for session")
@@ -582,7 +582,7 @@ pub fn effective_permission_policy(
     }
 }
 
-/// Wire `optionId` values published by Grok Build CLI (`prompter.rs` / ACP).
+/// Wire `optionId` values published by Supercharge CLI (`prompter.rs` / ACP).
 /// Host internal decision names stay snake_case (`allow_once`); only the
 /// JSON-RPC payload must use these hyphenated ids (#523).
 pub const FALLBACK_ALLOW_ONCE: &str = "allow-once";

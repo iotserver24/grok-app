@@ -32,21 +32,8 @@ vi.mock("@/lib/api", () => ({
   listenWallpaperRemoteSearchBatch: vi.fn(async () => () => {}),
   wallpaperRemoteCancelMediaRequests: vi.fn(async () => 0),
   wallpaperRemoteCancelAllMediaRequests: vi.fn(async () => 0),
-  wallpaperGrokAlbumCancelRequests: vi.fn(async () => 0),
-  wallpaperGrokAlbumCancelAllRequests: vi.fn(async () => 0),
   isDesktopHost: () => true,
   isTauri: () => false,
-  settingsGet: vi.fn(async () => ({ wallpaperXSearchMode: "cli" })),
-  settingsSet: vi.fn(async () => ({})),
-  wallpaperXSearch: vi.fn(),
-  wallpaperXSearchMore: vi.fn(),
-  wallpaperXSearchCancel: vi.fn(async () => true),
-  listenWallpaperXSearchProgress: vi.fn(async () => () => {}),
-  listenWallpaperXSearchBatch: vi.fn(async () => () => {}),
-  wallpaperFetchMedia: vi.fn(),
-  wallpaperImagine: vi.fn(),
-  wallpaperImaginePendingRecoveries: vi.fn(async () => []),
-  wallpaperImagineRecoverCatalog: vi.fn(),
   openExternalUrl: vi.fn(),
 }));
 
@@ -149,51 +136,6 @@ afterEach(() => {
 });
 
 describe("WallpaperSourceModal library paging", () => {
-  it("prefills Imagine from saved media details without starting generation", async () => {
-    const savedPage = page("saved-artwork");
-    savedPage.items[0].metadata = {
-      id: "saved-artwork-id",
-      source: "imagine",
-      sourceUrl: null,
-      license: null,
-      licenseUrl: null,
-      title: "Saved artwork",
-      width: 1280,
-      height: 720,
-      prompt: "A quiet mountain lake",
-      generation: null,
-      parentId: null,
-      favorite: false,
-      purpose: "generated",
-      bytes: 100,
-      modifiedMs: 1,
-    };
-    mocks.page.mockResolvedValue(savedPage);
-    renderLibrary();
-
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "settings.wallpaperSource.details.title: Saved artwork",
-      }),
-    );
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "settings.wallpaperSource.details.reuse",
-      }),
-    );
-
-    const prompt = await screen.findByPlaceholderText(
-      "settings.wallpaperSource.imaginePlaceholder",
-    );
-    expect(prompt).toHaveProperty("value", "A quiet mountain lake");
-    expect(
-      screen
-        .getByRole("tab", { name: "settings.wallpaperImagine" })
-        .getAttribute("aria-selected"),
-    ).toBe("true");
-    expect(mocks.page).toHaveBeenCalledTimes(1);
-  });
-
   it("removes an unfavorited item from the favorites view without deleting its file", async () => {
     const savedPage = page("favorite");
     savedPage.total = 1;
@@ -319,7 +261,7 @@ describe("WallpaperSourceModal library paging", () => {
     expect(scroller).not.toBeNull();
     scroller!.scrollTop = 275;
     fireEvent.click(
-      screen.getByRole("tab", { name: "settings.wallpaperFromX" }),
+      screen.getByRole("tab", { name: "settings.wallpaperWeb" }),
     );
     scroller!.scrollTop = 0;
     fireEvent.click(
@@ -448,44 +390,4 @@ describe("WallpaperSourceModal library paging", () => {
     expect(api.wallpaperRemoteFetchMedia).toHaveBeenCalledTimes(1);
   });
 
-  it("clears a prepared Imagine source when its library file is deleted", async () => {
-    const savedPage = page("video-source");
-    savedPage.total = 1;
-    savedPage.kindCounts = { all: 1, image: 1, video: 0 };
-    mocks.page.mockResolvedValue(savedPage);
-    mocks.delete.mockResolvedValue(undefined);
-    renderLibrary();
-
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: /settings\.wallpaperSource\.generateVideoFromImage/,
-      }),
-    );
-    expect(
-      screen.getByRole("button", {
-        name: "settings.wallpaperSource.removeSourceImage",
-      }),
-    ).toBeTruthy();
-    fireEvent.click(
-      screen.getByRole("tab", { name: "settings.wallpaperLibrary" }),
-    );
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "settings.wallpaperSource.delete",
-      }),
-    );
-    fireEvent.click(screen.getByTestId("wallpaper-library-delete-confirm"));
-    await waitFor(() =>
-      expect(mocks.delete).toHaveBeenCalledWith(
-        "C:/wallpapers/video-source.png",
-      ),
-    );
-
-    fireEvent.click(
-      screen.getByRole("tab", { name: "settings.wallpaperImagine" }),
-    );
-    expect(
-      screen.getByText("settings.wallpaperSource.videoSourceMissing"),
-    ).toBeTruthy();
-  });
 });

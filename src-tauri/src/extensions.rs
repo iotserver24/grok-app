@@ -1996,7 +1996,7 @@ pub fn set_mcp_enabled_in_toml(text: &str, name: &str, enabled: bool) -> String 
 
 /// Overlay `enabled` flags so CLI config.toml auto-load matches inject policy.
 ///
-/// Grok CLI still starts `[mcp_servers.*]` from GROK_HOME even when ACP
+/// Supercharge CLI still starts `[mcp_servers.*]` from GROK_HOME even when ACP
 /// `mcpServers` omits them. Solo official-aux inject must force user MCP
 /// (ChatCut, Playwright, …) `enabled = false` so X search cannot go there.
 /// `official-aux` in config (if any) stays on.

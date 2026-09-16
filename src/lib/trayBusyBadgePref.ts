@@ -5,7 +5,7 @@
  * Default: on. Fail-closed outside Tauri (invoke no-op via api).
  */
 
-export const TRAY_BUSY_BADGE_STORAGE_KEY = "grok.trayBusyBadge";
+export const TRAY_BUSY_BADGE_STORAGE_KEY = "supercharge.trayBusyBadge";
 
 /** Fired on `window` after a successful save (detail = boolean enabled). */
 export const TRAY_BUSY_BADGE_CHANGE_EVENT = "grok-tray-busy-badge-change";

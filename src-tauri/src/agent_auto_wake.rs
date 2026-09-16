@@ -1,6 +1,6 @@
 //! Auto-wake (CLI `[features].auto_wake`) — agent-home sync + spawn overlay.
 //!
-//! When enabled, Grok Build may inject a synthetic turn after background work
+//! When enabled, Supercharge may inject a synthetic turn after background work
 //! completes (bash / monitor / task completion, scheduled loops). Behavior is
 //! entirely CLI-side.
 //!
@@ -18,7 +18,7 @@ use crate::agent_home_config::{
 };
 
 pub const CONFIG_KEY: &str = "auto_wake_enabled";
-pub const GROK_CONFIG_ENV: &str = "GROK_CONFIG";
+pub const GROK_CONFIG_ENV: &str = "SUPERCHARGE_CONFIG";
 
 /// Normalize enable toggle (App default off / opt-in).
 #[allow(dead_code)]

@@ -10,7 +10,6 @@ import type {
 } from "@/components/ImageViewerContext";
 import type { MessageKey } from "@/i18n";
 import { isDesktopHost } from "@/lib/api";
-import { peekGrokAlbumThumbnail } from "@/lib/grokAlbumThumbnail";
 import { peekRemoteWallpaperThumbnail } from "@/lib/remoteWallpaperThumbnail";
 import { isWallpaperRemoteSource } from "@/lib/wallpaperRemoteSearch";
 import {
@@ -19,7 +18,6 @@ import {
   type WallpaperSourceErrorCode,
 } from "@/lib/wallpaperSource";
 import {
-  EMPTY_WALLPAPER_IMAGE_PLACEHOLDER,
   ensureLocalWallpaperMedia,
 } from "@/lib/wallpaperSourceMedia";
 import { wallpaperSourceErrorMessage } from "@/lib/wallpaperSourcePresentation";
@@ -122,72 +120,6 @@ export function useWallpaperItemPreview({
             candidate.fullUrl.startsWith("http"),
         );
         const slides: ImageSlideInput[] = viable.map((candidate) => {
-          const lazyAlbumOriginal =
-            candidate.source === "grok_album" &&
-            !candidate.localPath &&
-            candidate.fullUrl.startsWith("http");
-          if (lazyAlbumOriginal) {
-            const thumbnail =
-              peekGrokAlbumThumbnail(
-                candidate.thumbUrl || candidate.fullUrl,
-              ) || EMPTY_WALLPAPER_IMAGE_PLACEHOLDER;
-            return {
-              src: thumbnail,
-              kind: "image",
-              title: slideTitle(candidate),
-              alt: candidate.prompt || candidate.textPreview || undefined,
-              onView: () => {
-                if (sourceGeneration === sourceGenerationRef.current) {
-                  setSelectedId(candidate.id);
-                }
-              },
-              originalErrorMessage: (error) =>
-                wallpaperSourceErrorMessage(
-                  t,
-                  parseWallpaperSourceError(error),
-                ),
-              loadOriginal: async (signal) => {
-                if (sourceGeneration !== sourceGenerationRef.current) {
-                  return null;
-                }
-                try {
-                  const loaded = await ensureLocalWallpaperMedia(candidate, {
-                    signal,
-                  });
-                  if (sourceGeneration !== sourceGenerationRef.current) {
-                    return null;
-                  }
-                  setItems((previous) =>
-                    previous.map((current) =>
-                      current.id === candidate.id
-                        ? {
-                            ...current,
-                            localPath: loaded.path,
-                            metadata: loaded.metadata ?? current.metadata,
-                            fullUrl: current.fullUrl.startsWith("http")
-                              ? current.fullUrl
-                              : `file://${loaded.path}`,
-                          }
-                        : current,
-                    ),
-                  );
-                  return {
-                    src: loaded.path,
-                    kind: candidate.kind === "video" ? "video" : "image",
-                    mime: loaded.mime,
-                    poster:
-                      candidate.kind === "video" ? thumbnail : undefined,
-                  };
-                } catch (error) {
-                  if (sourceGeneration !== sourceGenerationRef.current) {
-                    return null;
-                  }
-                  throw error;
-                }
-              },
-            };
-          }
-
           const lazyRemoteOriginal =
             isWallpaperRemoteSource(candidate.source) &&
             !candidate.localPath &&

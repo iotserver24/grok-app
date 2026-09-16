@@ -1,4 +1,4 @@
-//! `.grokskin` ZIP inspect / export. Fail-closed on unknown top-level names.
+//! `.superchargeskin` ZIP inspect / export with legacy `.grokskin` compatibility.
 
 use std::collections::HashSet;
 use std::fs::{self, File};
@@ -22,7 +22,8 @@ pub const MANIFEST_MAX: u64 = 64 * 1024;
 pub const PREVIEW_MAX: u64 = 256 * 1024;
 pub const WALLPAPER_MAX: u64 = 200 * 1024 * 1024;
 pub const MAX_ENTRIES: usize = 16;
-pub const ZIP_COMMENT: &str = "GROKSKIN/1";
+pub const ZIP_COMMENT: &str = "SUPERCHARGESKIN/1";
+pub const LEGACY_ZIP_COMMENT: &str = "GROKSKIN/1";
 pub const DEFAULT_SCRIM: i32 = 100;
 pub const DEFAULT_COMPOSER_OPACITY: i32 = 100;
 pub const DEFAULT_UI_OPACITY: i32 = 100;
@@ -554,7 +555,7 @@ fn sha256_file(path: &Path) -> Result<String, String> {
     Ok(hex::encode(hasher.finalize()))
 }
 
-/// Inspect a `.grokskin` / selected `.zip` into `.staging/inspect/{id}/`.
+/// Inspect a `.superchargeskin`, legacy `.grokskin`, or selected `.zip` into staging.
 pub fn inspect_pack(zip_path: &Path, source: &str) -> Result<SkinPackPreviewDto, String> {
     inspect_pack_into(zip_path, &paths::skin_staging_inspect_dir(), source)
 }

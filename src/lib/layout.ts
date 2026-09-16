@@ -9,7 +9,7 @@
  *   except to enforce chrome min / viewport max.
  */
 
-export const LAYOUT_STORAGE_KEY = "grok-app.layout";
+export const LAYOUT_STORAGE_KEY = "supercharge-app.layout";
 
 /** Mirror phone CSS drawer breakpoint (`app.css` max-width: 820px). */
 export const MIRROR_DRAWER_BREAKPOINT = 820;

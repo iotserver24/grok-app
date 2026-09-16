@@ -39,6 +39,28 @@ function bodyPop(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(":scope > .cmm__pop");
 }
 
+const modelCatalog = [
+  {
+    id: "model-current",
+    label: "Model Current",
+    reasoningEfforts: [
+      { id: "low" },
+      { id: "medium" },
+      { id: "high" },
+      { id: "xhigh", isDefault: true },
+    ],
+  },
+  {
+    id: "model-next",
+    label: "Model Next",
+    reasoningEfforts: [
+      { id: "low" },
+      { id: "medium" },
+      { id: "high", isDefault: true },
+    ],
+  },
+];
+
 function renderProjectMenu() {
   const onSelect = vi.fn();
   render(
@@ -47,8 +69,8 @@ function renderProjectMenu() {
       projects={[
         {
           id: "p1",
-          name: "grok-app",
-          path: "/code/grok-app",
+          name: "supercharge-app",
+          path: "/code/supercharge-app",
           trusted: true,
           pathOk: true,
         },
@@ -109,7 +131,7 @@ describe("composer chip portal pops", () => {
     expect(bodyPop()).toBeNull();
 
     await user.click(trigger);
-    const row = screen.getByRole("menuitem", { name: "grok-app" });
+    const row = screen.getByRole("menuitem", { name: "supercharge-app" });
     await user.click(row);
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({ id: "p1" }),
@@ -121,10 +143,10 @@ describe("composer chip portal pops", () => {
     const user = userEvent.setup();
     render(
       <ComposerWorktreeMenu
-        activePath="/code/grok-app"
+        activePath="/code/supercharge-app"
         worktrees={[
           {
-            path: "/code/grok-app",
+            path: "/code/supercharge-app",
             branch: "main",
             head: "abc123",
             isMain: true,
@@ -170,10 +192,10 @@ describe("composer chip portal pops", () => {
     const onSwitchBranch = vi.fn();
     render(
       <ComposerWorktreeMenu
-        activePath="/code/grok-app"
+        activePath="/code/supercharge-app"
         worktrees={[
           {
-            path: "/code/grok-app",
+            path: "/code/supercharge-app",
             branch: "main",
             head: "abc123",
             isMain: true,
@@ -287,8 +309,9 @@ describe("composer chip portal pops", () => {
     const user = userEvent.setup();
     render(
       <ComposerModelMenu
-        modelId="test-model"
+        modelId="model-current"
         effort="high"
+        models={modelCatalog}
         labels={{
           model: "Model",
           effort: "Effort",
@@ -330,8 +353,9 @@ describe("composer chip portal pops", () => {
     const user = userEvent.setup();
     render(
       <ComposerModelMenu
-        modelId="test-model"
+        modelId="model-current"
         effort="high"
+        models={modelCatalog}
         labels={{
           model: "Model",
           effort: "Effort",
@@ -388,8 +412,9 @@ describe("composer chip portal pops", () => {
     const onModel = vi.fn();
     render(
       <ComposerModelMenu
-        modelId="grok-4.6"
+        modelId="model-current"
         effort="high"
+        models={modelCatalog}
         labels={{
           model: "Model",
           effort: "Effort",
@@ -418,12 +443,12 @@ describe("composer chip portal pops", () => {
     expect(pop).not.toBeNull();
     fireEvent.mouseEnter(pop!.querySelector(".cmm__row")!);
     const pick = await waitFor(() => {
-      const el = screen.getByRole("button", { name: /Grok 4\.5/ });
+      const el = screen.getByRole("button", { name: /Model Next/ });
       expect(el).toBeTruthy();
       return el;
     });
     await user.click(pick);
-    expect(onModel).toHaveBeenCalledWith("grok-4.5");
+    expect(onModel).toHaveBeenCalledWith("model-next");
     expect(bodyPop()).not.toBeNull();
     expect(bodyPop()!.classList.contains("cmm__pop--hub")).toBe(true);
     expect(
@@ -518,8 +543,9 @@ describe("composer chip portal pops", () => {
     const user = userEvent.setup();
     render(
       <ComposerModelMenu
-        modelId="test-model"
+        modelId="model-current"
         effort="high"
+        models={modelCatalog}
         labels={{
           model: "Model",
           effort: "Effort",
@@ -608,12 +634,13 @@ describe("composer chip portal pops", () => {
     expect(onContextWindow).toHaveBeenCalledWith(500000);
   });
 
-  it("localizes grok-4.6 xhigh via effort i18n in composer menu", async () => {
+  it("localizes a catalog xhigh effort in the composer menu", async () => {
     const user = userEvent.setup();
     render(
       <ComposerModelMenu
-        modelId="grok-4.6"
+        modelId="model-current"
         effort="xhigh"
+        models={modelCatalog}
         labels={{
           model: "Model",
           effort: "Effort",

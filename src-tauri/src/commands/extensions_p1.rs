@@ -714,10 +714,10 @@ pub async fn extensions_enable_all_skills(
     .map_err(|e| e.to_string())?
 }
 
-// ── Plugins via Grok Build CLI (`grok plugin …` + `inspect` + config.toml) ──
+// ── Plugins via Supercharge CLI (`supercharge plugin …` + `inspect` + config.toml) ──
 //
-// Keep field semantics aligned with Grok Build:
-// - install inventory: `grok plugin list --json` (status/name/version/source/…)
+// Keep field semantics aligned with Supercharge:
+// - install inventory: `supercharge plugin list --json` (status/name/version/source/…)
 // - enable/disable: `~/.grok/config.toml` `[plugins].disabled` / CLI enable|disable
 // - scope + component counts: `grok inspect --json` → `plugins[]`
 // Do not invent a parallel store or rewrite CLI `status` values.
@@ -753,11 +753,11 @@ pub struct PluginDto {
     pub path: Option<String>,
     /// Install status from `plugin list --json` (usually `"installed"`). Not enable/disable.
     pub status: String,
-    /// Load state from Grok Build config (`[plugins].disabled` / enable CLI).
+    /// Load state from Supercharge config (`[plugins].disabled` / enable CLI).
     pub enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repo_key: Option<String>,
-    /// Grok Build scope: user / project / cli / custom path / marketplace name.
+    /// Supercharge scope: user / project / cli / custom path / marketplace name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
     /// Component inventory from `grok inspect` (skills / agents / hooks / mcp).
@@ -770,7 +770,7 @@ fn run_grok_cli_args(args: &[&str], timeout_secs: u64) -> Result<(String, String
     let settings = store::load_settings();
     let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
     let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return Err("Grok Build CLI not found".into());
+        return Err("Supercharge CLI not found".into());
     };
 
     let args_owned: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
@@ -798,7 +798,7 @@ fn run_grok_cli_args(args: &[&str], timeout_secs: u64) -> Result<(String, String
 }
 
 /// Path to the user-level Grok config that tracks plugin enable/disable.
-/// Same file Grok Build reads for `[plugins].enabled` / `[plugins].disabled`.
+/// Same file Supercharge reads for `[plugins].enabled` / `[plugins].disabled`.
 fn user_grok_config_toml() -> std::path::PathBuf {
     crate::process_util::user_home().join(".grok").join("config.toml")
 }
@@ -854,7 +854,7 @@ pub fn parse_plugins_toml_string_array(toml_text: &str, key: &str) -> std::colle
     out
 }
 
-/// Grok Build config: plugin IDs or plain names listed under `[plugins].disabled`.
+/// Supercharge config: plugin IDs or plain names listed under `[plugins].disabled`.
 pub fn parse_plugins_disabled_names(toml_text: &str) -> std::collections::HashSet<String> {
     parse_plugins_toml_string_array(toml_text, "disabled")
 }
@@ -895,7 +895,7 @@ fn load_disabled_plugin_entries() -> std::collections::HashSet<String> {
     }
 }
 
-/// Match Grok Build disabled entries: plain name or full id `scope/hash/name`.
+/// Match Supercharge disabled entries: plain name or full id `scope/hash/name`.
 pub fn plugin_matches_disabled(
     name: &str,
     repo_key: Option<&str>,
